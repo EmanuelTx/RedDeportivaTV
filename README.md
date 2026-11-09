@@ -42,7 +42,21 @@ Casi todo se cambia en **`js/data.js`**:
 
 **Consejo para fotos:** usá un ancho de unos 1600 px y JPG de calidad media (menos de 400 KB) para que la página cargue rápido en celulares.
 
-## Pendiente antes de publicar
+## Publicación
 
-- En `index.html`, cambiar las rutas de `og:image` y del logo de la sección `ld+json` por la URL completa del sitio publicado.
+El sitio está publicado con GitHub Pages en **https://emanueltx.github.io/RedDeportivaTV/**
+(repositorio: https://github.com/EmanuelTx/RedDeportivaTV).
+
+Para actualizarlo, después de guardar los cambios, desde esta carpeta:
+
+```
+git add -A
+git commit -m "Describir el cambio"
+git push
+```
+
+En 1 o 2 minutos el sitio publicado se actualiza solo.
+
+## Pendiente
+
 - Si querés usarla como portafolio, agregá tu crédito en el pie (hay un comentario marcando el lugar).
