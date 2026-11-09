@@ -1,0 +1,15 @@
+# Fotos originales sin optimizar (la web usa las de assets/img/fotos)
+imagenes/
+
+# Configuración local de herramientas
+.claude/
+.vscode/
+
+# Archivos del sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Por si algún día se agregan claves o variables privadas
+.env
+.env.*
