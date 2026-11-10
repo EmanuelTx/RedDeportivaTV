@@ -23,6 +23,8 @@ service-account*.json
 respaldos/
 *.sql
 *.dump
+# ...excepto las migraciones y scripts de estructura (no contienen datos)
+!supabase/**/*.sql
 
 # Herramientas de Cloudflare
 .wrangler/
