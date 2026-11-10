@@ -1,0 +1,21 @@
+[
+  {
+    "slug": "album-de-prueba",
+    "estado": "publicada",
+    "titulo": "Álbum de prueba",
+    "descripcion": "Álbum de prueba con las fotos actuales de la web, para comprobar las páginas de álbumes y la vista previa al compartir.",
+    "portada": "/assets/img/fotos/futbol-duelo-1600.jpg",
+    "portada_alt": "Dos jugadores disputando la pelota",
+    "campeonato": "",
+    "categoria": "",
+    "partido": "",
+    "fecha": "2026-11-10",
+    "fotos": [
+      { "src": "/assets/img/fotos/futbol-duelo-1600.jpg", "mini": "/assets/img/fotos/futbol-duelo-800.jpg", "alt": "Dos jugadores disputando la pelota, uno con camiseta negra y otro con camiseta a rayas rojas y blancas", "descripcion": "Area 1" },
+      { "src": "/assets/img/fotos/futsal-arquero-1600.jpg", "mini": "/assets/img/fotos/futsal-arquero-800.jpg", "alt": "Arquero de futsal con camiseta azul número 20 controlando la pelota", "descripcion": "Futsal Paranaense" },
+      { "src": "/assets/img/fotos/futbol-festejo-gol-1600.jpg", "mini": "/assets/img/fotos/futbol-festejo-gol-800.jpg", "alt": "Jugador con camiseta a rayas rojas y blancas señalando a la cámara tras un gol", "descripcion": "Area 1" },
+      { "src": "/assets/img/fotos/futbol-nino-7-1600.jpg", "mini": "/assets/img/fotos/futbol-nino-7-800.jpg", "alt": "Niño jugador con camiseta azul número 7 sonriendo y señalando a la cámara", "descripcion": "Caacupemi" },
+      { "src": "/assets/img/fotos/futsal-festejo-1600.jpg", "mini": "/assets/img/fotos/futsal-festejo-800.jpg", "alt": "Jugador de futsal festejando con sus compañeros", "descripcion": "Futsal Paranaense" }
+    ]
+  }
+]

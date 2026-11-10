@@ -10,6 +10,20 @@ Thumbs.db
 desktop.ini
 .DS_Store
 
-# Por si algún día se agregan claves o variables privadas
+# Claves y variables privadas: NUNCA se suben
 .env
 .env.*
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+service-account*.json
+
+# Copias de seguridad locales (contienen datos)
+respaldos/
+*.sql
+*.dump
+
+# Herramientas de Cloudflare
+.wrangler/
+node_modules/

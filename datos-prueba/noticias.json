@@ -1,0 +1,23 @@
+[
+  {
+    "slug": "publicacion-de-prueba",
+    "estado": "publicada",
+    "titulo": "Publicación de prueba",
+    "descripcion": "Página de prueba para comprobar las noticias y la vista previa al compartir en la nueva dirección de RedDeportivaTV.",
+    "contenido": "Esta es una publicación de prueba. Sirve para comprobar que cada noticia tiene su propia dirección y que, al compartirla por WhatsApp o Facebook, aparecen el título, la descripción y la foto correctos.\n\nCuando el panel de administración esté listo, las noticias reales se cargarán desde ahí y esta página de prueba se eliminará.",
+    "portada": "/assets/img/fotos/futbol-duelo-1600.jpg",
+    "portada_alt": "Dos jugadores disputando la pelota, uno con camiseta negra y otro con camiseta a rayas rojas y blancas",
+    "campeonato": "Prueba",
+    "categoria": "",
+    "fecha": "2026-11-10"
+  },
+  {
+    "slug": "borrador-de-prueba",
+    "estado": "borrador",
+    "titulo": "Borrador de prueba (no debe verse)",
+    "descripcion": "Si esta página aparece, la regla de borradores no funciona.",
+    "contenido": "Este borrador nunca debe mostrarse al público.",
+    "portada": "/assets/img/fotos/futsal-arquero-1600.jpg",
+    "fecha": "2026-11-10"
+  }
+]
