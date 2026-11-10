@@ -19,7 +19,7 @@
 }
 
 .pub__titulo { font-size: clamp(2.4rem, 7vw, 4.25rem); font-weight: 800; margin-bottom: 1rem; }
-.pub__meta { color: var(--gray-2); font-weight: 600; text-transform: capitalize; margin-bottom: 1.25rem; }
+.pub__meta { color: var(--gray-2); font-weight: 600; margin-bottom: 1.25rem; }
 .pub__bajada { font-size: clamp(1.1rem, 2.4vw, 1.3rem); color: #e2e2e2; margin-bottom: 2rem; }
 
 .pub__portada { margin: 0 0 2.5rem; border-top: 4px solid var(--red); }
