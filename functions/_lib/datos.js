@@ -27,7 +27,9 @@ async function desdeSupabase(env, tabla, slug) {
   const url =
     env.SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/" + tabla +
     "?slug=eq." + encodeURIComponent(slug) +
-    "&estado=eq.publicada&select=" + CONSULTAS[tabla] + "&limit=1";
+    // No se filtra por "estado": los visitantes no tienen permiso sobre esa
+    // columna y RLS ya devuelve solo lo publicado.
+    "&select=" + CONSULTAS[tabla] + "&limit=1";
   const r = await fetch(url, {
     headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: "Bearer " + env.SUPABASE_ANON_KEY }
   });

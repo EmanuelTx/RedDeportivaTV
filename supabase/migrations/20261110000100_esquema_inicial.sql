@@ -9,21 +9,33 @@
 --   * Administradores: los usuarios registrados en public.administradores
 --     (máximo 2). Ningún otro usuario puede modificar nada.
 --   * Como "Automatically expose new tables" está desactivado, los
---     permisos de la API (GRANT) se dan explícitamente acá.
---   * Bucket "fotos": lectura pública por URL, subida solo de admins,
---     solo JPG/PNG/WebP y hasta 5 MB por archivo.
+--     permisos de la API (GRANT) se dan explícitamente acá, después de
+--     quitar cualquier permiso heredado.
+--   * Fotos en DOS buckets:
+--       - "fotos-borradores": PRIVADO. Todo se sube acá primero.
+--       - "fotos-publicas":   público por URL, pero la base de datos solo
+--         deja poner un archivo si su noticia/álbum ya está publicado.
+--     Una publicación no puede volver a borrador (ni borrarse) mientras
+--     tenga archivos en el bucket público.
+--     Ambos: solo JPG/PNG/WebP y hasta 5 MB por archivo.
 --
--- Se ejecuta todo dentro de una transacción: si algo falla, no se
--- aplica nada. No contiene claves, contraseñas ni correos.
+-- Rutas de archivos (iguales en los dos buckets):
+--   albumes/<id del álbum>/<archivo>     noticias/<id de la noticia>/<archivo>
+--
+-- No borra ni modifica nada existente: solo crea objetos nuevos. Si algún
+-- objeto ya existiera, la migración falla y no se aplica nada.
+-- Se ejecuta en una sola transacción. No contiene claves ni correos.
 -- =====================================================================
 
 begin;
 
 -- ---------------------------------------------------------------------
--- 0. Esquema privado para funciones internas (no expuesto por la API)
+-- 0. Esquema privado para funciones internas (NO expuesto por la API)
 -- ---------------------------------------------------------------------
-create schema if not exists private;
+create schema private;
 revoke all on schema private from public;
+-- "usage" solo permite que las políticas RLS llamen a estas funciones;
+-- el esquema no está en la lista de esquemas expuestos de la Data API.
 grant usage on schema private to anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------
@@ -37,13 +49,15 @@ create table public.administradores (
 comment on table public.administradores is
   'Usuarios con permiso para administrar contenido. Máximo 2. Se cargan solo desde el editor SQL.';
 
--- Máximo dos administradores
+-- Máximo dos administradores (con bloqueo para que dos altas simultáneas
+-- no puedan pasar el límite)
 create function private.limitar_administradores()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
+  perform pg_catalog.pg_advisory_xact_lock(hashtext('rdtv_administradores'));
   if (select count(*) from public.administradores) >= 2 then
     raise exception 'RedDeportivaTV admite como máximo 2 administradores';
   end if;
@@ -56,7 +70,9 @@ create trigger limitar_administradores
   for each row execute function private.limitar_administradores();
 
 -- ¿El usuario que hace la consulta es administrador?
--- SECURITY DEFINER: puede leer la tabla aunque el que consulta no.
+-- SECURITY DEFINER: lee la tabla aunque quien consulta no pueda. Solo
+-- devuelve verdadero/falso sobre uno mismo (auth.uid() sale del token
+-- firmado por Supabase; no se puede falsificar desde la web).
 create function private.es_admin()
 returns boolean
 language sql
@@ -65,13 +81,11 @@ security definer
 set search_path = ''
 as $$
   select exists (
-    select 1 from public.administradores a where a.user_id = auth.uid()
+    select 1 from public.administradores a where a.user_id = (select auth.uid())
   );
 $$;
-revoke all on function private.es_admin() from public;
-grant execute on function private.es_admin() to anon, authenticated, service_role;
 
--- Actualiza la columna actualizado_en en cada cambio
+-- Fecha de última modificación
 create function private.tocar_actualizado()
 returns trigger
 language plpgsql
@@ -95,6 +109,16 @@ begin
   end if;
   return new;
 end;
+$$;
+
+-- Formato de ruta permitido: albumes|noticias / <uuid> / <archivo>
+create function private.ruta_valida(p_ruta text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(p_ruta ~ '^(albumes|noticias)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Za-z0-9_-][A-Za-z0-9._-]{0,149}$', false);
 $$;
 
 -- ---------------------------------------------------------------------
@@ -157,7 +181,8 @@ create table public.noticias (
   titulo         text not null check (char_length(titulo) between 1 and 160),
   descripcion    text check (char_length(descripcion) <= 300),
   contenido      text check (char_length(contenido) <= 50000),
-  portada_path   text check (char_length(portada_path) <= 300),
+  -- La portada tiene que estar en la carpeta de ESTA noticia
+  portada_path   text check (portada_path ~ ('^noticias/' || id::text || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,149}$')),
   portada_alt    text check (char_length(portada_alt) <= 200),
   campeonato_id  uuid references public.campeonatos (id) on delete restrict,
   categoria_id   uuid references public.categorias (id) on delete restrict,
@@ -183,7 +208,7 @@ create table public.albumes (
   titulo         text not null check (char_length(titulo) between 1 and 160),
   descripcion    text check (char_length(descripcion) <= 300),
   fecha          date,
-  portada_path   text check (char_length(portada_path) <= 300),
+  portada_path   text check (portada_path ~ ('^albumes/' || id::text || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,149}$')),
   portada_alt    text check (char_length(portada_alt) <= 200),
   campeonato_id  uuid references public.campeonatos (id) on delete restrict,
   categoria_id   uuid references public.categorias (id) on delete restrict,
@@ -203,8 +228,11 @@ create index albumes_fecha_idx      on public.albumes (fecha desc);
 create table public.fotos (
   id          uuid primary key default gen_random_uuid(),
   album_id    uuid not null references public.albumes (id) on delete cascade,
-  path        text not null unique check (char_length(path) <= 300),
-  mini_path   text check (char_length(mini_path) <= 300),
+  -- El archivo tiene que estar en la carpeta de SU álbum
+  path        text not null unique
+              check (path ~ ('^albumes/' || album_id::text || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,149}$')),
+  mini_path   text
+              check (mini_path ~ ('^albumes/' || album_id::text || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,149}$')),
   ancho       integer check (ancho between 1 and 10000),
   alto        integer check (alto between 1 and 10000),
   peso_bytes  integer check (peso_bytes between 1 and 5242880),
@@ -234,7 +262,81 @@ create table public.transmisiones (
 create index transmisiones_vivo_idx on public.transmisiones (en_vivo, actualizado_en desc);
 
 -- ---------------------------------------------------------------------
--- 7. Disparadores (fechas automáticas)
+-- 7. Funciones que consultan las tablas
+-- ---------------------------------------------------------------------
+-- ¿El álbum está publicado? (para mostrar sus fotos a visitantes, que no
+-- tienen permiso sobre la columna albumes.estado)
+create function private.album_publicado(p_album uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.albumes a where a.id = p_album and a.estado = 'publicada'
+  );
+$$;
+
+-- ¿La ruta pertenece a una noticia/álbum PUBLICADO? Decide qué archivos
+-- pueden entrar al bucket público.
+create function private.ruta_publicada(p_ruta text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if not private.ruta_valida(p_ruta) then
+    return false;
+  end if;
+  v_id := split_part(p_ruta, '/', 2)::uuid;
+  if split_part(p_ruta, '/', 1) = 'albumes' then
+    return exists (select 1 from public.albumes a where a.id = v_id and a.estado = 'publicada');
+  else
+    return exists (select 1 from public.noticias n where n.id = v_id and n.estado = 'publicada');
+  end if;
+end;
+$$;
+
+-- Impide que una publicación vuelva a borrador o se borre mientras tenga
+-- archivos en el bucket público (primero hay que pasarlos al privado).
+-- También impide cambiar el id, porque las rutas de archivos dependen de él.
+-- SECURITY INVOKER: solo lo ejecutan quienes ya pueden editar (admins).
+create function private.proteger_fotos_publicas()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_prefijo text;
+begin
+  if tg_op = 'UPDATE' and new.id is distinct from old.id then
+    raise exception 'No se puede cambiar el identificador de una publicación';
+  end if;
+
+  if old.estado = 'publicada' and (tg_op = 'DELETE' or new.estado <> 'publicada') then
+    v_prefijo := tg_table_name || '/' || old.id::text || '/';
+    if exists (
+      select 1 from storage.objects o
+      where o.bucket_id = 'fotos-publicas' and starts_with(o.name, v_prefijo)
+    ) then
+      raise exception 'Primero hay que pasar las fotos de esta publicación al bucket privado (fotos-borradores)';
+    end if;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 8. Disparadores
 -- ---------------------------------------------------------------------
 create trigger tocar_actualizado before update on public.campeonatos   for each row execute function private.tocar_actualizado();
 create trigger tocar_actualizado before update on public.categorias    for each row execute function private.tocar_actualizado();
@@ -246,8 +348,28 @@ create trigger tocar_actualizado before update on public.transmisiones for each 
 create trigger marcar_publicacion before insert or update on public.noticias for each row execute function private.marcar_publicacion();
 create trigger marcar_publicacion before insert or update on public.albumes  for each row execute function private.marcar_publicacion();
 
+create trigger proteger_fotos_publicas before update or delete on public.noticias for each row execute function private.proteger_fotos_publicas();
+create trigger proteger_fotos_publicas before update or delete on public.albumes  for each row execute function private.proteger_fotos_publicas();
+
 -- ---------------------------------------------------------------------
--- 8. Row Level Security (RLS)
+-- 9. Permisos EXECUTE mínimos sobre las funciones
+--    (Postgres da EXECUTE a todos por defecto: se quita y se da solo
+--    a quien lo necesita. Las funciones de disparadores no necesitan
+--    EXECUTE de nadie para funcionar.)
+-- ---------------------------------------------------------------------
+revoke all on function
+  private.limitar_administradores(), private.es_admin(), private.tocar_actualizado(),
+  private.marcar_publicacion(), private.ruta_valida(text), private.album_publicado(uuid),
+  private.ruta_publicada(text), private.proteger_fotos_publicas()
+  from public, anon, authenticated;
+
+grant execute on function private.album_publicado(uuid) to anon, authenticated;  -- fotos visibles
+grant execute on function private.es_admin()            to authenticated;        -- políticas de admins
+grant execute on function private.ruta_valida(text)     to authenticated;        -- subida de fotos
+grant execute on function private.ruta_publicada(text)  to authenticated;        -- bucket público
+
+-- ---------------------------------------------------------------------
+-- 10. Row Level Security (RLS)
 -- ---------------------------------------------------------------------
 alter table public.administradores enable row level security;
 alter table public.campeonatos     enable row level security;
@@ -258,8 +380,9 @@ alter table public.albumes         enable row level security;
 alter table public.fotos           enable row level security;
 alter table public.transmisiones   enable row level security;
 
--- Administradores: cada admin solo puede ver su propia fila (para que el
--- panel sepa si tiene permiso). Nadie puede agregar/quitar admins por API.
+-- Administradores: cada admin solo ve su propia fila (para que el panel
+-- sepa si tiene permiso). No hay políticas de escritura: nadie puede
+-- agregar, cambiar ni quitar admins desde la web.
 create policy "Admin ve su propia fila" on public.administradores
   for select to authenticated
   using (user_id = (select auth.uid()));
@@ -278,23 +401,7 @@ create policy "Visitantes leen noticias publicadas" on public.noticias
 create policy "Visitantes leen albumes publicados" on public.albumes
   for select to anon, authenticated using (estado = 'publicada');
 
--- Fotos: visibles solo si su álbum está publicado.
--- Se usa una función SECURITY DEFINER porque los visitantes no tienen
--- permiso sobre la columna albumes.estado (ver GRANT por columnas).
-create function private.album_publicado(p_album uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select exists (
-    select 1 from public.albumes a where a.id = p_album and a.estado = 'publicada'
-  );
-$$;
-revoke all on function private.album_publicado(uuid) from public;
-grant execute on function private.album_publicado(uuid) to anon, authenticated, service_role;
-
+-- Fotos: visibles solo si su álbum está publicado
 create policy "Visitantes leen fotos de albumes publicados" on public.fotos
   for select to anon, authenticated
   using (private.album_publicado(album_id));
@@ -320,11 +427,16 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
--- 9. Permisos de la API (GRANT explícitos)
---    "Automatically expose new tables" está desactivado, así que sin
---    estos GRANT la Data API no puede ver las tablas. RLS decide QUÉ
---    filas; los GRANT deciden QUÉ operaciones y columnas.
+-- 11. Permisos de la API (GRANT explícitos)
+--     Primero se quita TODO permiso que pudiera venir por defecto
+--     (incluido TRUNCATE, que RLS no controla). Después se da solo lo
+--     necesario. RLS decide QUÉ filas; los GRANT, QUÉ operaciones y columnas.
 -- ---------------------------------------------------------------------
+revoke all on
+  public.administradores, public.campeonatos, public.categorias, public.partidos,
+  public.noticias, public.albumes, public.fotos, public.transmisiones
+  from public, anon, authenticated;
+
 grant usage on schema public to anon, authenticated, service_role;
 
 -- Visitantes (anon): solo lectura, y solo de columnas públicas
@@ -341,40 +453,60 @@ grant select (id, titulo, youtube_url, en_vivo, termina_en, partido_id)
   on public.transmisiones to anon;
 -- anon NO recibe ningún permiso sobre public.administradores.
 
--- Usuarios con sesión: operaciones completas; RLS las limita a los admins
+-- Usuarios con sesión: leer/crear/editar/borrar; RLS lo limita a los admins.
+-- (Sin TRUNCATE, REFERENCES ni TRIGGER.)
 grant select, insert, update, delete on
   public.campeonatos, public.categorias, public.partidos,
   public.noticias, public.albumes, public.fotos, public.transmisiones
   to authenticated;
+-- Administradores: solo lectura (de su propia fila, por RLS).
 grant select on public.administradores to authenticated;
 
--- service_role (solo para tareas de servidor, p. ej. respaldos; nunca en la web)
-grant all on all tables in schema public to service_role;
+-- service_role (solo tareas de servidor, p. ej. respaldos; nunca en la web)
+grant all on
+  public.administradores, public.campeonatos, public.categorias, public.partidos,
+  public.noticias, public.albumes, public.fotos, public.transmisiones
+  to service_role;
 
 -- ---------------------------------------------------------------------
--- 10. Almacenamiento de fotos
+-- 12. Almacenamiento de fotos (dos buckets)
+--     Si ya existiera un bucket con estos nombres, la migración falla
+--     sin cambiar nada (no se sobrescribe ninguna configuración).
 -- ---------------------------------------------------------------------
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('fotos', 'fotos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
-on conflict (id) do update
-  set public = excluded.public,
-      file_size_limit = excluded.file_size_limit,
-      allowed_mime_types = excluded.allowed_mime_types;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
+  ('fotos-borradores', 'fotos-borradores', false, 5242880, array['image/jpeg', 'image/png', 'image/webp']),
+  ('fotos-publicas',   'fotos-publicas',   true,  5242880, array['image/jpeg', 'image/png', 'image/webp']);
 
--- Las fotos se ven por su URL pública. No se permite LISTAR el bucket a
--- visitantes. Solo los admins pueden subir, reemplazar, listar o borrar.
-create policy "Admins listan fotos" on storage.objects
+-- Bucket PRIVADO: solo admins, y solo con rutas válidas.
+create policy "Admins ven fotos privadas" on storage.objects
   for select to authenticated
-  using (bucket_id = 'fotos' and (select private.es_admin()));
-create policy "Admins suben fotos" on storage.objects
+  using (bucket_id = 'fotos-borradores' and (select private.es_admin()));
+create policy "Admins suben fotos privadas" on storage.objects
   for insert to authenticated
-  with check (bucket_id = 'fotos' and (select private.es_admin()));
-create policy "Admins reemplazan fotos" on storage.objects
+  with check (bucket_id = 'fotos-borradores' and (select private.es_admin()) and private.ruta_valida(name));
+create policy "Admins cambian fotos privadas" on storage.objects
   for update to authenticated
-  using (bucket_id = 'fotos' and (select private.es_admin()))
-  with check (bucket_id = 'fotos' and (select private.es_admin()));
-create policy "Admins borran fotos" on storage.objects
+  using (bucket_id = 'fotos-borradores' and (select private.es_admin()))
+  with check (bucket_id = 'fotos-borradores' and (select private.es_admin()) and private.ruta_valida(name));
+create policy "Admins borran fotos privadas" on storage.objects
   for delete to authenticated
-  using (bucket_id = 'fotos' and (select private.es_admin()));
+  using (bucket_id = 'fotos-borradores' and (select private.es_admin()));
+
+-- Bucket PÚBLICO: cualquiera abre un archivo por su URL, pero nadie puede
+-- listar el contenido salvo los admins. Un archivo solo puede ENTRAR
+-- (subirse, moverse o renombrarse) si su noticia/álbum está publicado.
+create policy "Admins listan fotos publicas" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'fotos-publicas' and (select private.es_admin()));
+create policy "Admins publican fotos" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'fotos-publicas' and (select private.es_admin()) and private.ruta_publicada(name));
+create policy "Admins cambian fotos publicas" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'fotos-publicas' and (select private.es_admin()))
+  with check (bucket_id = 'fotos-publicas' and (select private.es_admin()) and private.ruta_publicada(name));
+create policy "Admins retiran fotos publicas" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'fotos-publicas' and (select private.es_admin()));
 
 commit;

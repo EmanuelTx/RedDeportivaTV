@@ -20,11 +20,28 @@ campeonatos ─┬─< partidos >─┬─ categorias
              │              │
              ├─< noticias >─┤        (estado: borrador | publicada)
              └─< albumes  >─┘
-                   └─< fotos         (rutas dentro del bucket "fotos")
+                   └─< fotos         (rutas de archivos, ver abajo)
 
 transmisiones (manuales: enlace de YouTube, EN VIVO sí/no, hora de fin)
 administradores (máximo 2, enlazados a usuarios de Supabase Auth)
 ```
+
+## Fotos: dos buckets
+
+| Bucket | ¿Se abre por URL? | Qué contiene |
+|---|---|---|
+| `fotos-borradores` | **No** (privado) | Todo lo que se sube. Fotos de borradores. |
+| `fotos-publicas` | Sí | Solo fotos de noticias/álbumes **publicados**. |
+
+Rutas (iguales en ambos): `albumes/<id del álbum>/<archivo>` y `noticias/<id de la noticia>/<archivo>`.
+
+La base de datos garantiza que:
+
+- un archivo solo puede entrar a `fotos-publicas` (subirse, moverse o renombrarse) si su publicación está publicada;
+- una publicación **no puede volver a borrador ni borrarse** mientras tenga archivos en `fotos-publicas`.
+
+Flujo del panel: **publicar** = marcar como publicada → mover sus archivos al bucket público.
+**Despublicar** = mover sus archivos al bucket privado → marcar como borrador.
 
 ## Quién puede hacer qué
 
@@ -34,7 +51,9 @@ administradores (máximo 2, enlazados a usuarios de Supabase Auth)
 | Ver borradores | ❌ | ❌ | ✅ |
 | Ver la transmisión EN VIVO vigente | ✅ | ✅ | ✅ (y todas) |
 | Crear / editar / borrar contenido | ❌ | ❌ | ✅ |
+| Abrir una foto de un borrador por su URL | ❌ | ❌ | ✅ (con sesión) |
 | Subir / borrar fotos | ❌ | ❌ | ✅ |
+| Poner en el bucket público una foto de un borrador | ❌ | ❌ | ❌ |
 | Ver quién creó cada publicación | ❌ | ✅* | ✅ |
 | Ver / cambiar administradores | ❌ | ❌ | Solo su fila / ❌ (solo por SQL) |
 
