@@ -12,7 +12,14 @@
 --
 -- Prueba noticias y álbumes publicados y en borrador, y fotos en el
 -- bucket privado (fotos-borradores) y en el público (fotos-publicas).
--- Las "fotos" de prueba son solo registros: no se sube ningún archivo.
+--
+-- ⚠ ALCANCE: estas pruebas verifican las REGLAS (RLS, permisos, estados).
+--   Para eso simulan con INSERT/UPDATE sobre storage.objects lo que la
+--   Storage API comprueba antes de subir o mover un archivo. NO suben ni
+--   mueven archivos reales, no prueban URLs públicas ni cachés.
+--   El panel NUNCA escribe storage.objects: usa supabase.storage.
+--   Las pruebas con fotografías reales están en
+--   pruebas/almacenamiento.html y son obligatorias antes de usar el panel.
 --
 -- Resultado: una tabla en la que TODAS las filas deben decir ok = true.
 -- =====================================================================
@@ -316,14 +323,37 @@ select pg_temp.probar('Usuario no admin: NO puede crear buckets', 'bloqueado',
   pg_temp.como('authenticated', pg_temp.usuario(), $q$insert into storage.buckets (id, name, public) values ('prueba-intruso', 'prueba-intruso', true)$q$));
 
 -- =====================================================================
--- F) Flujo correcto para despublicar y límite de administradores
+-- F) Estados de publicación y límite de administradores
+--    Los UPDATE de storage.objects simulan la comprobación de permisos
+--    que hace supabase.storage.move(..., { destinationBucket }).
 -- =====================================================================
-select pg_temp.probar('Admin: devuelve la foto pública al bucket privado', 'permitido (1 filas)',
+-- Publicar el álbum borrador (a2), que tiene su foto en el bucket privado
+select pg_temp.probar('Admin: NO puede pasar directo a "publicada" con fotos en el privado', 'bloqueado',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicada' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
+select pg_temp.probar('Admin: marca el álbum como "publicando"', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicando' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
+select pg_temp.probar('Visitante: NO ve un álbum "publicando" ni sus fotos', '0 / 0',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select (select count(*) from public.albumes where id = '00000000-0000-0000-0000-0000000000a2') || ' / ' || (select count(*) from public.fotos where album_id = '00000000-0000-0000-0000-0000000000a2')$q$));
+select pg_temp.probar('Admin (permiso de move): pasa la foto al público mientras publica', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update storage.objects set bucket_id = 'fotos-publicas' where bucket_id = 'fotos-borradores' and name = 'albumes/00000000-0000-0000-0000-0000000000a2/bor.jpg'$q$));
+select pg_temp.probar('Admin: con todas las fotos en el público, marca "publicada"', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicada' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
+select pg_temp.probar('Visitante: ahora sí ve ese álbum y su foto', '1 / 1',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select (select count(*) from public.albumes where id = '00000000-0000-0000-0000-0000000000a2') || ' / ' || (select count(*) from public.fotos where album_id = '00000000-0000-0000-0000-0000000000a2')$q$));
+
+-- Despublicar el álbum publicado (a1), que tiene su foto en el bucket público
+select pg_temp.probar('Admin: marca el álbum como "despublicando"', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'despublicando' where id = '00000000-0000-0000-0000-0000000000a1'$q$));
+select pg_temp.probar('Visitante: deja de ver el álbum en cuanto está "despublicando"', '0 / 0',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select (select count(*) from public.albumes where id = '00000000-0000-0000-0000-0000000000a1') || ' / ' || (select count(*) from public.fotos where album_id = '00000000-0000-0000-0000-0000000000a1')$q$));
+select pg_temp.probar('Admin: NO puede cerrar como "borrador" con una foto todavía en el público', 'bloqueado',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'borrador' where id = '00000000-0000-0000-0000-0000000000a1'$q$));
+select pg_temp.probar('Admin: NO puede subir fotos nuevas al público mientras despublica', 'bloqueado',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$insert into storage.objects (bucket_id, name) values ('fotos-publicas', 'albumes/00000000-0000-0000-0000-0000000000a1/nueva.jpg')$q$));
+select pg_temp.probar('Admin (permiso de move): devuelve la foto al bucket privado', 'permitido (1 filas)',
   pg_temp.como('authenticated', pg_temp.admin(), $q$update storage.objects set bucket_id = 'fotos-borradores' where bucket_id = 'fotos-publicas' and name = 'albumes/00000000-0000-0000-0000-0000000000a1/pub.jpg'$q$));
 select pg_temp.probar('Admin: después sí puede pasar el álbum a borrador', 'permitido (1 filas)',
   pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'borrador' where id = '00000000-0000-0000-0000-0000000000a1'$q$));
-select pg_temp.probar('Visitante: ya no ve ese álbum ni sus fotos', '0 / 0',
-  pg_temp.leer('anon', pg_temp.anon(), $q$select (select count(*) from public.albumes where id = '00000000-0000-0000-0000-0000000000a1') || ' / ' || (select count(*) from public.fotos where album_id = '00000000-0000-0000-0000-0000000000a1')$q$));
 
 do $$
 declare

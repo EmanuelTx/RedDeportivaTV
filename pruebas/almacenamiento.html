@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Pruebas de almacenamiento</title>
+  <style>
+    :root { color-scheme: light dark; --rojo: #d71920; --borde: #8884; }
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    fieldset { border: 1px solid var(--borde); border-radius: 8px; margin: 1rem 0; padding: 12px 16px; }
+    label { display: block; margin: .5rem 0; }
+    input[type=text], input[type=password], input[type=email] { width: 100%; box-sizing: border-box; padding: 6px 8px; }
+    button { padding: 8px 14px; margin: 4px 8px 4px 0; cursor: pointer; }
+    button.principal { background: var(--rojo); color: #fff; border: 0; border-radius: 6px; }
+    .nota { font-size: .9rem; opacity: .8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .92rem; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+    td.ok { color: #1a8a3a; font-weight: 600; }
+    td.mal { color: var(--rojo); font-weight: 700; }
+    td.aviso { color: #b07800; font-weight: 600; }
+    #resumen { font-weight: 700; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Pruebas de almacenamiento con fotos reales</h1>
+  <p class="nota">
+    Herramienta interna de RedDeportivaTV. Usa la Storage API oficial (<code>supabase.storage</code>).
+    Crea un álbum temporal <code>prueba-integracion-…</code>, lo publica y despublica, simula cortes
+    de red y al final borra todo. No guarda contraseñas: la sesión se pierde al cerrar la página.
+    Ejecutar solo desde <code>localhost</code>.
+  </p>
+
+  <fieldset>
+    <legend>Proyecto</legend>
+    <label>URL del proyecto Supabase <input id="url" type="text" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
+    <label>Clave pública (anon / publishable) <input id="clave" type="text" autocomplete="off"></label>
+    <p class="nota">Nunca pegues acá la clave <code>service_role</code> / secret.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Administrador</legend>
+    <label>Correo <input id="correo" type="email" autocomplete="username"></label>
+    <label>Contraseña <input id="contrasena" type="password" autocomplete="current-password"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Foto real</legend>
+    <label>Elegí una foto JPG, PNG o WebP de hasta 5 MB <input id="foto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+  </fieldset>
+
+  <button id="ejecutar" class="principal">Ejecutar pruebas</button>
+  <button id="cache" disabled>Volver a comprobar la caché</button>
+  <button id="limpiar">Borrar restos de pruebas anteriores</button>
+
+  <div id="resumen"></div>
+  <table>
+    <thead><tr><th>#</th><th>Resultado</th><th>Prueba</th><th>Detalle</th></tr></thead>
+    <tbody id="tabla"></tbody>
+  </table>
+
+  <script type="module" src="almacenamiento.js"></script>
+</body>
+</html>

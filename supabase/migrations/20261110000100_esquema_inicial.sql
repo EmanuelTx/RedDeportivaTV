@@ -12,12 +12,23 @@
 --     permisos de la API (GRANT) se dan explícitamente acá, después de
 --     quitar cualquier permiso heredado.
 --   * Fotos en DOS buckets:
---       - "fotos-borradores": PRIVADO. Todo se sube acá primero.
+--       - "fotos-borradores": PRIVADO. Fotos de borradores.
 --       - "fotos-publicas":   público por URL, pero la base de datos solo
---         deja poner un archivo si su noticia/álbum ya está publicado.
---     Una publicación no puede volver a borrador (ni borrarse) mientras
---     tenga archivos en el bucket público.
+--         deja entrar un archivo si su noticia/álbum se está publicando
+--         o ya está publicado.
 --     Ambos: solo JPG/PNG/WebP y hasta 5 MB por archivo.
+--     Los archivos se mueven SOLO con la Storage API (supabase.storage
+--     move() con destinationBucket), nunca escribiendo storage.objects.
+--
+-- Estados de noticias y álbumes:
+--   borrador → publicando → publicada → despublicando → borrador
+--   Los visitantes solo ven "publicada". Los estados intermedios cubren
+--   el momento en que se mueven los archivos: si la red falla a mitad de
+--   camino, la publicación queda marcada como pendiente (y oculta) en vez
+--   de quedar inconsistente, y el panel la completa al reintentar.
+--   La base de datos impide:
+--     * pasar a "publicada" si quedan archivos en el bucket privado;
+--     * pasar a "borrador" o borrarla si quedan archivos en el público.
 --
 -- Rutas de archivos (iguales en los dos buckets):
 --   albumes/<id del álbum>/<archivo>     noticias/<id de la noticia>/<archivo>
@@ -187,7 +198,7 @@ create table public.noticias (
   campeonato_id  uuid references public.campeonatos (id) on delete restrict,
   categoria_id   uuid references public.categorias (id) on delete restrict,
   partido_id     uuid references public.partidos (id) on delete restrict,
-  estado         text not null default 'borrador' check (estado in ('borrador', 'publicada')),
+  estado         text not null default 'borrador' check (estado in ('borrador', 'publicando', 'publicada', 'despublicando')),
   publicado_en   timestamptz,
   creado_por     uuid references auth.users (id) on delete set null default auth.uid(),
   creado_en      timestamptz not null default now(),
@@ -213,7 +224,7 @@ create table public.albumes (
   campeonato_id  uuid references public.campeonatos (id) on delete restrict,
   categoria_id   uuid references public.categorias (id) on delete restrict,
   partido_id     uuid references public.partidos (id) on delete restrict,
-  estado         text not null default 'borrador' check (estado in ('borrador', 'publicada')),
+  estado         text not null default 'borrador' check (estado in ('borrador', 'publicando', 'publicada', 'despublicando')),
   publicado_en   timestamptz,
   creado_por     uuid references auth.users (id) on delete set null default auth.uid(),
   creado_en      timestamptz not null default now(),
@@ -278,8 +289,8 @@ as $$
   );
 $$;
 
--- ¿La ruta pertenece a una noticia/álbum PUBLICADO? Decide qué archivos
--- pueden entrar al bucket público.
+-- ¿La ruta pertenece a una noticia/álbum que se está publicando o ya está
+-- publicado? Decide qué archivos pueden entrar al bucket público.
 create function private.ruta_publicada(p_ruta text)
 returns boolean
 language plpgsql
@@ -295,16 +306,18 @@ begin
   end if;
   v_id := split_part(p_ruta, '/', 2)::uuid;
   if split_part(p_ruta, '/', 1) = 'albumes' then
-    return exists (select 1 from public.albumes a where a.id = v_id and a.estado = 'publicada');
+    return exists (select 1 from public.albumes a where a.id = v_id and a.estado in ('publicando', 'publicada'));
   else
-    return exists (select 1 from public.noticias n where n.id = v_id and n.estado = 'publicada');
+    return exists (select 1 from public.noticias n where n.id = v_id and n.estado in ('publicando', 'publicada'));
   end if;
 end;
 $$;
 
--- Impide que una publicación vuelva a borrador o se borre mientras tenga
--- archivos en el bucket público (primero hay que pasarlos al privado).
+-- Mantiene coherentes el estado y la ubicación de los archivos:
+--   * a "publicada" solo si no quedan archivos en el bucket privado;
+--   * a "borrador" (o borrar) solo si no quedan archivos en el público.
 -- También impide cambiar el id, porque las rutas de archivos dependen de él.
+-- Solo LEE storage.objects (metadatos); nunca lo modifica.
 -- SECURITY INVOKER: solo lo ejecutan quienes ya pueden editar (admins).
 create function private.proteger_fotos_publicas()
 returns trigger
@@ -312,24 +325,36 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  v_prefijo text;
+  v_prefijo text := tg_table_name || '/' || old.id::text || '/';
+  v_en_publico boolean;
+  v_en_privado boolean;
 begin
   if tg_op = 'UPDATE' and new.id is distinct from old.id then
     raise exception 'No se puede cambiar el identificador de una publicación';
   end if;
 
-  if old.estado = 'publicada' and (tg_op = 'DELETE' or new.estado <> 'publicada') then
-    v_prefijo := tg_table_name || '/' || old.id::text || '/';
-    if exists (
-      select 1 from storage.objects o
-      where o.bucket_id = 'fotos-publicas' and starts_with(o.name, v_prefijo)
-    ) then
-      raise exception 'Primero hay que pasar las fotos de esta publicación al bucket privado (fotos-borradores)';
-    end if;
+  if tg_op = 'UPDATE' and new.estado is not distinct from old.estado then
+    return new;
   end if;
 
+  select exists (select 1 from storage.objects o
+                 where o.bucket_id = 'fotos-publicas' and starts_with(o.name, v_prefijo)),
+         exists (select 1 from storage.objects o
+                 where o.bucket_id = 'fotos-borradores' and starts_with(o.name, v_prefijo))
+    into v_en_publico, v_en_privado;
+
   if tg_op = 'DELETE' then
+    if v_en_publico then
+      raise exception 'Primero hay que pasar las fotos de esta publicación al bucket privado (fotos-borradores)';
+    end if;
     return old;
+  end if;
+
+  if new.estado = 'borrador' and v_en_publico then
+    raise exception 'Primero hay que pasar las fotos de esta publicación al bucket privado (fotos-borradores)';
+  end if;
+  if new.estado = 'publicada' and v_en_privado then
+    raise exception 'Todavía hay fotos de esta publicación en el bucket privado: hay que terminar de moverlas';
   end if;
   return new;
 end;
@@ -494,7 +519,17 @@ create policy "Admins borran fotos privadas" on storage.objects
 
 -- Bucket PÚBLICO: cualquiera abre un archivo por su URL, pero nadie puede
 -- listar el contenido salvo los admins. Un archivo solo puede ENTRAR
--- (subirse, moverse o renombrarse) si su noticia/álbum está publicado.
+-- (subirse, moverse o renombrarse) si su noticia/álbum está "publicando"
+-- o "publicada".
+--
+-- Cómo usa esto supabase.storage.move(ruta, ruta, { destinationBucket }):
+-- la Storage API exige SELECT y UPDATE sobre el archivo de origen y prueba
+-- un UPDATE de esa fila con el bucket y el nombre nuevos. Postgres combina
+-- con OR los WITH CHECK de las políticas UPDATE, así que:
+--   privado → público: lo autoriza "Admins cambian fotos publicas" (solo
+--                      si la publicación se está publicando o está publicada);
+--   público → privado: lo autoriza "Admins cambian fotos privadas".
+-- La escritura final la hace la propia Storage API (no el panel).
 create policy "Admins listan fotos publicas" on storage.objects
   for select to authenticated
   using (bucket_id = 'fotos-publicas' and (select private.es_admin()));
