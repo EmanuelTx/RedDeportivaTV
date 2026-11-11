@@ -26,18 +26,25 @@ function documento(p) {
   const esAlbum = p.tipo === "albumes";
   const meta = [fechaCorta(p.fecha), p.campeonato, p.categoria, p.partido].filter(Boolean).map(esc).join(" · ");
   const cabecera = `
-      <p class="eyebrow">${esAlbum ? "Álbum · " + p.fotos.length + (p.fotos.length === 1 ? " foto" : " fotos") : "Noticia"}</p>
+      <p class="eyebrow">${esAlbum ? "Cobertura" + (p.fotos.length ? " · " + p.fotos.length + (p.fotos.length === 1 ? " foto" : " fotos") : "") : "Noticia"}</p>
       <h1 class="pub__titulo">${esc(p.titulo || "(Sin título)")}</h1>
       ${meta ? `<p class="pub__meta">${meta}</p>` : ""}
       ${p.descripcion ? `<p class="pub__bajada">${esc(p.descripcion)}</p>` : ""}`;
+  const video = p.video
+    ? `<section class="cob-video"><div class="cob-video__marco"><img class="cob-video__miniatura" src="https://i.ytimg.com/vi/${esc(p.video)}/hqdefault.jpg" alt=""></div>
+        <p class="cob-video__alternativa">Video resumen · <a href="https://www.youtube.com/watch?v=${esc(p.video)}">Ver en YouTube ↗</a></p></section>`
+    : `<section class="cob-aviso"><p class="cob-aviso__titulo">Video resumen en edición</p><p>Próximamente disponible.</p></section>`;
   const cuerpo = esAlbum
     ? `<section class="container pub__articulo pub__articulo--ancho">${cabecera}
-        <div class="gallery__grid pub__galeria">${p.fotos.length ? p.fotos.map((f, i) => `
-          <figure class="gallery__item${i === 0 ? " gallery__item--wide" : ""}" style="margin:0">
-            <img src="${esc(f.mini || f.src)}" alt="${esc(f.alt || p.titulo)}">
+        ${video}
+        ${p.avisoFotos || !p.fotos.length
+          ? `<section class="cob-aviso"><p class="cob-aviso__titulo">Fotografías próximamente disponibles</p><p>Estamos preparando las fotos de esta cobertura.</p></section>`
+          : `<div class="gallery__grid pub__galeria">${p.fotos.map((f, i) => `
+          <figure class="gallery__item${i === 0 ? " gallery__item--wide" : ""}">
+            <img src="${esc(i === 0 ? f.src : f.mini || f.src)}" alt="${esc(f.alt || p.titulo)}">
             ${f.descripcion ? `<figcaption class="gallery__caption">${esc(f.descripcion)}</figcaption>` : ""}
-          </figure>`).join("") : '<p class="pub__vacio">Este álbum todavía no tiene fotos.</p>'}
-        </div></section>`
+          </figure>`).join("")}
+        </div>`}</section>`
     : `<article class="container pub__articulo">${cabecera}
         ${p.portada ? `<figure class="pub__portada"><img src="${esc(p.portada)}" alt="${esc(p.portada_alt || p.titulo)}"></figure>` : ""}
         <div class="pub__contenido">${parrafos(p.contenido) || "<p><em>(Sin contenido)</em></p>"}</div>
@@ -45,7 +52,7 @@ function documento(p) {
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <base href="${esc(location.origin)}/">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/publicacion.css">
+<link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/publicacion.css"><link rel="stylesheet" href="/css/coberturas.css">
 </head><body><main class="pub">${cuerpo}</main></body></html>`;
 }
 

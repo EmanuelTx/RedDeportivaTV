@@ -26,6 +26,7 @@
 
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/en-vivo.css">
+  <link rel="stylesheet" href="css/coberturas.css">
 
   <script type="application/ld+json">
   {
@@ -60,6 +61,7 @@
 
       <nav class="nav" id="nav" aria-label="Navegación principal">
         <ul class="nav__list">
+          <li><a href="/coberturas">Coberturas</a></li>
           <li><a href="#nosotros">Nosotros</a></li>
           <li><a href="#videos">Videos</a></li>
           <li><a href="#galeria">Galería</a></li>
@@ -164,18 +166,23 @@
       </div>
     </section>
 
-    <!-- ===================== 5. GALERÍA ===================== -->
+    <!-- ===================== 5. ÚLTIMAS COBERTURAS ===================== -->
     <section class="section gallery" id="galeria" aria-labelledby="gallery-title">
       <div class="container">
         <div class="section__head reveal">
           <div>
-            <p class="eyebrow">Fotografía deportiva</p>
-            <h2 class="section__title" id="gallery-title">Galería</h2>
+            <p class="eyebrow">Fotos y videos de cada partido</p>
+            <h2 class="section__title" id="gallery-title">Últimas coberturas</h2>
           </div>
-          <a href="https://www.facebook.com/profile.php?id=61596329971481" class="link-arrow" target="_blank" rel="noopener">Más fotos en Facebook</a>
+          <a href="/coberturas" class="link-arrow">Ver todas las coberturas</a>
         </div>
-        <!-- Las fotos se cargan desde js/data.js → "galeria" -->
+        <!-- Se reemplaza por las últimas coberturas publicadas (js/inicio-coberturas.js).
+             Si no hay conexión con la base de datos, quedan las fotos de js/data.js. -->
         <div class="gallery__grid" id="galleryGrid"></div>
+        <div class="inicio-coberturas__acciones">
+          <a href="/coberturas" class="btn btn--primary">Ver todas las coberturas</a>
+          <a href="https://www.facebook.com/profile.php?id=61596329971481" class="link-arrow" target="_blank" rel="noopener">También en Facebook</a>
+        </div>
       </div>
     </section>
 
@@ -276,5 +283,7 @@
   <script src="js/data.js"></script>
   <script src="js/main.js"></script>
   <script src="js/en-vivo.js"></script>
+  <script src="js/coberturas.js"></script>
+  <script src="js/inicio-coberturas.js"></script>
 </body>
 </html>

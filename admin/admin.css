@@ -199,3 +199,19 @@
   .tabla-envoltura { border: 0; }
   .btn--derecha { margin-left: 0; }
 }
+
+/* ---------- Coberturas (panel) ---------- */
+.buscador-panel input { min-height: 52px; font-size: 1.1rem; margin-bottom: .75rem; }
+.espacio { margin: .5rem 0 1rem; }
+.espacio__barra { height: 10px; background: var(--black-3); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+.espacio__lleno { display: block; height: 100%; width: 0; background: #2f9e5a; transition: width .4s; }
+.espacio__lleno--alto { background: #d18a00; }
+.espacio__texto { margin: .35rem 0 0; color: var(--gray); font-size: .9rem; }
+.alerta--suave { background: #2a2210; border-color: #5a4a10; }
+.estado--f-disponible, .estado--v-disponible { background: #0f3d1f; border-color: #1f7a3e; color: #8ff0b0; }
+.estado--f-preparacion, .estado--v-edicion { background: #3a2a00; border-color: #7a5a00; color: #ffd36b; }
+.video-vista img { width: 240px; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius); margin-top: .5rem; }
+.lista-duplicados { margin: .5rem 0 1rem; padding-left: 1.2rem; }
+.lista-duplicados a { color: var(--white); font-weight: 600; }
+.ver-mas-panel { text-align: center; margin: 1rem 0; }
+.fechas-registro { margin: .25rem 0 0; }

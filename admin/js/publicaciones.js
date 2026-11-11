@@ -34,7 +34,8 @@ async function lista(main, tipo) {
     [{ valor: "borrador", texto: "Borradores" }, { valor: "publicada", texto: "Publicadas" }, { valor: "pendiente", texto: "A medias" }],
     { vacio: "Todos los estados" });
   const fCamp = opciones(h("select", { "aria-label": "Campeonato" }), opcCampeonatos(), { vacio: "Todos los campeonatos" });
-  const fCat = opciones(h("select", { "aria-label": "Categoría" }), opcCategorias(), { vacio: "Todas las categorías" });
+  const fCat = opciones(h("select", { "aria-label": "Categoría" }),
+    app.cat.categorias.map((k) => ({ valor: k.id, texto: nombreCampeonato(k.campeonato_id) + " · " + k.nombre })), { vacio: "Todas las categorías" });
   const buscar = h("input", { type: "search", placeholder: "Buscar por título…", "aria-label": "Buscar" });
   const cuerpo = h("tbody");
 
@@ -110,16 +111,21 @@ async function editor(main, tipo, id) {
   if (fecha) fecha.value = reg.fecha || "";
   portadaAlt.value = reg.portada_alt || "";
   opciones(campeonato, opcCampeonatos(), { vacio: "— Sin campeonato —", valor: reg.campeonato_id });
-  opciones(categoria, opcCategorias(), { vacio: "— Sin categoría —", valor: reg.categoria_id });
+  // Las categorías dependen del campeonato elegido (cada campeonato tiene las suyas)
+  const pintarCategorias = (valor) => {
+    opciones(categoria, opcCategorias(campeonato.value), { vacio: "— Sin categoría —", valor });
+    categoria.disabled = !campeonato.value;
+  };
+  pintarCategorias(reg.categoria_id);
   const pintarPartidos = (valor) => opciones(partido, opcPartidos(campeonato.value, categoria.value), { vacio: "— Sin partido —", valor });
   pintarPartidos(reg.partido_id);
-  campeonato.addEventListener("change", () => pintarPartidos(partido.value));
+  campeonato.addEventListener("change", () => { pintarCategorias(""); pintarPartidos(""); });
   categoria.addEventListener("change", () => pintarPartidos(partido.value));
   partido.addEventListener("change", () => {
     const p = partidoPorId(partido.value);
     if (!p) return;
-    if (!campeonato.value) { campeonato.value = p.campeonato_id; }
-    if (!categoria.value && p.categoria_id) categoria.value = p.categoria_id;
+    if (campeonato.value !== p.campeonato_id) { campeonato.value = p.campeonato_id; pintarCategorias(p.categoria_id || ""); }
+    if (p.categoria_id) categoria.value = p.categoria_id;
     if (fecha && !fecha.value && p.fecha) fecha.value = p.fecha;
   });
 

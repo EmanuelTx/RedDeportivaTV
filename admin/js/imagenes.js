@@ -1,17 +1,19 @@
 /* =========================================================
    Panel RedDeportivaTV · preparación de fotos antes de subir
 
-   - Acepta JPG, PNG o WebP de hasta 40 MB (fotos de cámara).
-   - Las reduce a 2048 px de lado mayor (JPEG 85 %) y crea una miniatura
-     de 640 px. Así cada foto pesa ~0,3–1 MB y el plan gratuito
-     (1 GB de almacenamiento, 5 GB de tráfico) rinde mucho más.
-   - Al redibujar en un lienzo se eliminan los datos EXIF (incluida la
-     ubicación GPS de la cámara o el celular).
+   Tres versiones de cada foto:
+   - Miniatura 640 px (~60 KB): tarjetas y galerías, carga rápida.
+   - Versión web 2048 px, JPEG de alta calidad (~0,4–0,9 MB): visor
+     ampliado. Se ve nítida incluso en pantallas grandes.
+   - Original (opcional, hasta 50 MB): tal como vino de la cámara, en un
+     bucket privado. No se pierde calidad de forma permanente.
+   Al redibujar en un lienzo se eliminan los datos EXIF de las versiones
+   web (incluida la ubicación GPS). El original no se modifica.
    ========================================================= */
 
-import { PESO_MAXIMO, TIPOS_PERMITIDOS } from "../../js/admin/fotos-publicacion.js";
+import { PESO_MAXIMO, TIPOS_PERMITIDOS, PESO_ORIGINAL_MAXIMO } from "../../js/admin/fotos-publicacion.js";
 
-export const PESO_ORIGINAL_MAXIMO = 40 * 1024 * 1024;
+export { PESO_ORIGINAL_MAXIMO };
 const LADO_GRANDE = 2048;
 const LADO_MINI = 640;
 
@@ -44,9 +46,9 @@ async function redimensionar(imagen, ladoMax, calidad) {
   return { blob, ancho, alto };
 }
 
-export async function prepararFoto(archivo) {
+export async function prepararFoto(archivo, { conservarOriginal = false } = {}) {
   if (!TIPOS_PERMITIDOS.includes(archivo.type)) throw new Error(archivo.name + ": solo JPG, PNG o WebP.");
-  if (archivo.size > PESO_ORIGINAL_MAXIMO) throw new Error(archivo.name + ": supera los 40 MB.");
+  if (archivo.size > PESO_ORIGINAL_MAXIMO) throw new Error(archivo.name + ": supera los 50 MB.");
   let imagen;
   try {
     imagen = await createImageBitmap(archivo, { imageOrientation: "from-image" });
@@ -54,12 +56,13 @@ export async function prepararFoto(archivo) {
     throw new Error(archivo.name + ": no es una imagen válida.");
   }
   try {
-    const grande = await redimensionar(imagen, LADO_GRANDE, 0.85);
+    const grande = await redimensionar(imagen, LADO_GRANDE, 0.88);
     const mini = await redimensionar(imagen, LADO_MINI, 0.8);
     if (grande.blob.size > PESO_MAXIMO) throw new Error(archivo.name + ": no se pudo reducir a menos de 5 MB.");
     return {
       archivo: new File([grande.blob], "foto.jpg", { type: "image/jpeg" }),
       mini: new File([mini.blob], "mini.jpg", { type: "image/jpeg" }),
+      original: conservarOriginal ? archivo : null,
       ancho: grande.ancho,
       alto: grande.alto
     };

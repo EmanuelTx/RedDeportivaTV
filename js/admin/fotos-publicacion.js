@@ -27,6 +27,9 @@
 
 export const BUCKET_PRIVADO = "fotos-borradores";
 export const BUCKET_PUBLICO = "fotos-publicas";
+// Originales opcionales: SIEMPRE privados, nunca se mueven al público.
+export const BUCKET_ORIGINALES = "fotos-originales";
+export const PESO_ORIGINAL_MAXIMO = 50 * 1024 * 1024;
 export const TIPOS_PERMITIDOS = ["image/jpeg", "image/png", "image/webp"];
 export const PESO_MAXIMO = 5 * 1024 * 1024; // 5 MB, igual que los buckets
 // Tiempo que navegadores y CDN pueden guardar una foto pública.
@@ -159,10 +162,12 @@ export async function revisar(sb, tipo, id) {
 export async function borrarPublicacion(sb, tipo, id, opciones = {}) {
   await completar(sb, tipo, id, opciones);
   await despublicar(sb, tipo, id, opciones);
-  const rutas = await listar(sb, BUCKET_PRIVADO, carpeta(tipo, id));
-  for (let i = 0; i < rutas.length; i += 100) {
-    const { error } = await sb.storage.from(BUCKET_PRIVADO).remove(rutas.slice(i, i + 100));
-    if (error) fallar("Borrar archivos", error);
+  for (const bucket of tipo === "albumes" ? [BUCKET_PRIVADO, BUCKET_ORIGINALES] : [BUCKET_PRIVADO]) {
+    const rutas = await listar(sb, bucket, carpeta(tipo, id));
+    for (let i = 0; i < rutas.length; i += 100) {
+      const { error } = await sb.storage.from(bucket).remove(rutas.slice(i, i + 100));
+      if (error) fallar("Borrar archivos", error);
+    }
   }
   const { error } = await sb.from(tabla(tipo)).delete().eq("id", id);
   if (error) fallar("Borrar " + tipo, error);
@@ -202,25 +207,45 @@ async function subirArchivo(sb, bucket, ruta, archivo) {
   if (error) fallar("Subir foto", error);
 }
 
-/* foto: un File/Blob, o { archivo, mini, ancho, alto } (ver admin/js/imagenes.js) */
+/* foto: un File/Blob, o { archivo, mini, original, ancho, alto } (ver admin/js/imagenes.js)
+   - archivo: versión optimizada para la web (se publica)
+   - mini:    miniatura para tarjetas y galerías (se publica)
+   - original (opcional): el archivo tal como vino de la cámara; queda
+     SIEMPRE en el bucket privado fotos-originales. */
 export async function subirFotoAlbum(sb, albumId, foto, datos = {}) {
   const f = foto instanceof Blob ? { archivo: foto } : foto;
   const medidas = f.ancho ? { ancho: f.ancho, alto: f.alto } : await validarImagen(f.archivo);
   if (!TIPOS_PERMITIDOS.includes(f.archivo.type) || f.archivo.size > PESO_MAXIMO) await validarImagen(f.archivo);
+  const guardarOriginal = f.original && TIPOS_PERMITIDOS.includes(f.original.type) && f.original.size <= PESO_ORIGINAL_MAXIMO;
 
   const bucket = bucketSegunEstado(await leerEstado(sb, "albumes", albumId));
   const base = carpeta("albumes", albumId) + "/" + nombreBase();
   const ruta = base + "." + EXTENSION[f.archivo.type];
   const rutaMini = f.mini ? base + "-mini." + EXTENSION[f.mini.type] : null;
+  const rutaOriginal = guardarOriginal ? base + "-original." + EXTENSION[f.original.type] : null;
+  const subidos = []; // [bucket, ruta] para deshacer si algo falla
 
-  await subirArchivo(sb, bucket, ruta, f.archivo);
-  if (rutaMini) {
-    try {
+  async function deshacer() {
+    for (const [b, r] of subidos) await sb.storage.from(b).remove([r]).catch(() => {});
+  }
+
+  try {
+    await subirArchivo(sb, bucket, ruta, f.archivo);
+    subidos.push([bucket, ruta]);
+    if (rutaMini) {
       await subirArchivo(sb, bucket, rutaMini, f.mini);
-    } catch (e) {
-      await sb.storage.from(bucket).remove([ruta]);
-      throw e;
+      subidos.push([bucket, rutaMini]);
     }
+    if (rutaOriginal) {
+      const { error } = await sb.storage.from(BUCKET_ORIGINALES).upload(rutaOriginal, f.original, {
+        cacheControl: "3600", contentType: f.original.type, upsert: false
+      });
+      if (error) fallar("Guardar original", error);
+      subidos.push([BUCKET_ORIGINALES, rutaOriginal]);
+    }
+  } catch (e) {
+    await deshacer();
+    throw e;
   }
 
   const { data, error } = await sb
@@ -229,6 +254,8 @@ export async function subirFotoAlbum(sb, albumId, foto, datos = {}) {
       album_id: albumId,
       path: ruta,
       mini_path: rutaMini,
+      original_path: rutaOriginal,
+      original_bytes: rutaOriginal ? f.original.size : null,
       ancho: medidas.ancho,
       alto: medidas.alto,
       peso_bytes: f.archivo.size,
@@ -239,10 +266,18 @@ export async function subirFotoAlbum(sb, albumId, foto, datos = {}) {
     .select("*")
     .single();
   if (error) {
-    await sb.storage.from(bucket).remove([ruta, rutaMini].filter(Boolean)); // deshacer la subida
+    await deshacer();
     fallar("Guardar foto", error);
   }
   return Object.assign({ bucket }, data);
+}
+
+/* Descarga el original (enlace firmado de 10 minutos, solo administradores). */
+export async function enlaceOriginal(sb, foto) {
+  if (!foto.original_path) return null;
+  const { data, error } = await sb.storage.from(BUCKET_ORIGINALES).createSignedUrl(foto.original_path, 600, { download: true });
+  if (error) fallar("Enlace al original", error);
+  return data.signedUrl;
 }
 
 /* Sube la portada de una noticia; devuelve la ruta para guardar en portada_path. */
@@ -268,6 +303,24 @@ export async function borrarFoto(sb, foto) {
   const { error } = await sb.from("fotos").delete().eq("id", foto.id);
   if (error) fallar("Borrar foto", error);
   await borrarArchivos(sb, [foto.path, foto.mini_path]);
+  if (foto.original_path) {
+    const r = await sb.storage.from(BUCKET_ORIGINALES).remove([foto.original_path]);
+    if (r.error) fallar("Borrar original", r.error);
+  }
+}
+
+/* Espacio usado (solo administradores): { total, porBucket: {bucket: {archivos, bytes}} } */
+export const LIMITE_PLAN_GRATUITO = 1024 * 1024 * 1024; // 1 GB de Supabase Free
+export async function usoAlmacenamiento(sb) {
+  const { data, error } = await sb.rpc("uso_almacenamiento");
+  if (error) fallar("Espacio usado", error);
+  const porBucket = {};
+  let total = 0;
+  for (const f of data || []) {
+    porBucket[f.bucket] = { archivos: Number(f.archivos), bytes: Number(f.bytes) };
+    total += Number(f.bytes);
+  }
+  return { total, porBucket, limite: LIMITE_PLAN_GRATUITO, proporcion: total / LIMITE_PLAN_GRATUITO };
 }
 
 /* ---------- Ver fotos ---------- */

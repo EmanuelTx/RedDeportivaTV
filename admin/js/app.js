@@ -12,15 +12,17 @@ import { h, vaciar, aviso, campo, boton, conBoton, errorAmigable } from "./ui.js
 import * as publicaciones from "./publicaciones.js";
 import * as catalogos from "./catalogos.js";
 import * as transmisiones from "./transmisiones.js";
+import * as coberturas from "./coberturas.js";
 
 const $ = (id) => document.getElementById(id);
 
 const SECCIONES = {
+  coberturas: (main, p) => coberturas.vista(main, p),
   noticias: (main, p) => publicaciones.vista(main, "noticias", p),
-  albumes: (main, p) => publicaciones.vista(main, "albumes", p),
   campeonatos: (main) => catalogos.vista(main, "campeonatos"),
-  categorias: (main) => catalogos.vista(main, "categorias"),
-  partidos: (main) => catalogos.vista(main, "partidos"),
+  categorias: (main, p) => catalogos.vista(main, "categorias", p),
+  jornadas: (main, p) => catalogos.vista(main, "jornadas", p),
+  partidos: (main, p) => catalogos.vista(main, "partidos", p),
   envivo: (main) => transmisiones.vista(main),
   cuenta: (main) => vistaCuenta(main)
 };
@@ -74,7 +76,7 @@ async function entrar(sesion) {
   app.nombre = admin.nombre;
   $("usuarioNombre").textContent = admin.nombre;
   pantalla("panel");
-  if (!location.hash || location.hash === "#") location.replace("#/noticias");
+  if (!location.hash || location.hash === "#") location.replace("#/coberturas");
   else await navegar();
 }
 
@@ -82,7 +84,8 @@ async function entrar(sesion) {
 
 function rutaActual() {
   const partes = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  const seccion = SECCIONES[partes[0]] ? partes[0] : "noticias";
+  if (partes[0] === "albumes") partes[0] = "coberturas"; // enlaces viejos del panel
+  const seccion = SECCIONES[partes[0]] ? partes[0] : "coberturas";
   return { seccion, params: partes.slice(1) };
 }
 

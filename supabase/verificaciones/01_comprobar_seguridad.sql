@@ -121,15 +121,15 @@ select 'Todas las funciones privadas tienen search_path fijo', '0 sin fijar',
 from pg_proc where pronamespace = 'private'::regnamespace;
 
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'EXECUTE: el visitante solo puede usar', 'album_publicado',
+select 'EXECUTE: el visitante solo puede usar', 'album_publicado, normalizar',
        coalesce(string_agg(proname, ', ' order by proname), '(ninguna)'),
-       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado'
+       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, normalizar'
 from pg_proc where pronamespace = 'private'::regnamespace and has_function_privilege('anon', oid, 'EXECUTE');
 
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'EXECUTE: un usuario con sesión solo puede usar', 'album_publicado, es_admin, ruta_publicada, ruta_valida',
+select 'EXECUTE: un usuario con sesión solo puede usar', 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida',
        coalesce(string_agg(proname, ', ' order by proname), '(ninguna)'),
-       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, es_admin, ruta_publicada, ruta_valida'
+       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida'
 from pg_proc where pronamespace = 'private'::regnamespace and has_function_privilege('authenticated', oid, 'EXECUTE');
 
 with tablas(t) as (values ('administradores'),('campeonatos'),('categorias'),('partidos'),('noticias'),('albumes'),('fotos'),('transmisiones')),

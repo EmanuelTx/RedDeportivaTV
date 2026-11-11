@@ -28,24 +28,43 @@ administradores (máximo 2, enlazados a usuarios de Supabase Auth)
 
 ## Migración 2: coberturas
 
-Cada fila de `albumes` es una **cobertura**: fotos, video de YouTube y datos del partido o de la jornada. No hay otra tabla.
+```
+campeonatos ─┬─< categorias  (cada una pertenece a SU campeonato)
+             ├─< jornadas    (campeonato + categoría opcional; opcionales)
+             └─< partidos    (jornada opcional, orden manual)
+albumes = COBERTURAS (tipo: partido | jornada | campeonato | evento | pendiente)
+   └─< fotos  (versión web + miniatura; original opcional y privado)
+```
+
+**Cobertura = fila de `albumes`.** Tiene fotos, video de YouTube y su organización. No hay otra tabla de coberturas.
 
 | Columna | Para qué |
 |---|---|
-| `partido_id` | Cobertura de un partido. Campeonato, categoría, fecha y jornada se copian solos del partido. |
-| `campeonato_id`, `categoria_id`, `fecha`, `jornada` | Cobertura de una jornada o evento completo, sin partido. |
-| `visible` | Interruptor "Visible en la web". |
+| `tipo` | `partido` (máximo 1 por partido) · `jornada` (puede haber varias por jornada) · `campeonato` · `evento` · `pendiente` (contenido anterior sin clasificar) |
+| `partido_id` / `jornada_id` / `campeonato_id`, `categoria_id` | Según el tipo. Los datos se copian solos desde el partido o la jornada. |
+| `fecha` | **Fecha real** del partido o evento. La usan el buscador y el archivo. Es distinta de `publicado_en` (primera publicación) y de `creado_en` (alta del registro). |
+| `visible` | Interruptor "Visible en la web" |
 | `estado_fotos` | `pendiente` · `preparacion` · `disponible` |
 | `estado_video`, `youtube_id` | `pendiente` · `edicion` · `disponible`, más el ID de 11 caracteres |
-| `estado` | Mecanismo interno que mueve los archivos entre buckets (`publicada` = fotos publicadas). |
-| `actividad_en` | Última novedad pública. Ordena la portada y el catálogo. |
-| `fotos_disponibles`, `video_publico`, `portada_publica` | Columnas calculadas que lee el visitante. |
+| `estado` | Mecanismo interno que mueve los archivos entre buckets (`publicada` = fotos publicadas) |
+| `actividad_en` | Última novedad pública. Ordena la lista "recientes". |
+| `busqueda` | Texto sin tildes que mantiene la base: título, campeonato, categoría, jornada, equipos, instancia y fecha en varias formas |
+| `fotos_disponibles`, `video_publico`, `portada_publica` | Columnas calculadas que lee el visitante. Nunca revelan nada privado. |
 
 **Reglas de la base:**
-- un partido tiene como máximo una cobertura;
-- una jornada no se repite con el mismo campeonato, categoría, fecha y nombre de jornada;
-- las fotos solo van al bucket público si la cobertura es visible y está "disponible";
-- la dirección (slug) queda fija desde la primera publicación.
+- **Categorías:** cada una es de su campeonato y no puede usarse con otro.
+- **Jornadas:** no se duplican por mayúsculas o tildes. "Fecha 2 · Libre" y "Fecha 2 · Senior" son jornadas distintas.
+- **Partidos:** un partido de una jornada toma el campeonato y la categoría de su jornada.
+- **Fotos públicas:** solo van al bucket público si la cobertura es visible y está "disponible".
+- **Cobertura visible:** tiene que tener su fecha real, salvo las de tipo `pendiente`.
+- **Dirección (slug):** queda fija desde la primera publicación.
+
+**Funciones:**
+- `buscar_coberturas(...)` y `archivo_coberturas()` funcionan con los permisos de quien consulta (RLS): el visitante solo ve lo publicado.
+- `posibles_duplicados(...)` es para el panel.
+- `uso_almacenamiento()` es solo para administradores.
+
+**Originales:** el bucket privado `fotos-originales` (hasta 50 MB por archivo) es opcional. Desde el panel se elige si guardar el original de cada foto, y el panel muestra el espacio usado.
 
 **Verificaciones:** después de la migración 2 hay que ejecutar las dos, `verificaciones/01_…` y `verificaciones/02_comprobar_coberturas.sql`.
 
