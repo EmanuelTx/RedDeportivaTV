@@ -47,7 +47,9 @@ export function configSupabase(env) {
 }
 
 function cabeceras(clave) {
-  const h = { apikey: clave, Accept: "application/json" };
+  // Accept-Profile: el esquema "public" se pide explícitamente porque en este
+  // proyecto el esquema por defecto de la Data API es graphql_public.
+  const h = { apikey: clave, Accept: "application/json", "Accept-Profile": "public" };
   // Las claves anon antiguas (JWT) también van como Bearer; las nuevas sb_publishable_ no.
   if (clave.startsWith("eyJ")) h.Authorization = "Bearer " + clave;
   return h;
