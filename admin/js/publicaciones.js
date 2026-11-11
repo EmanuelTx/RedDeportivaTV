@@ -90,6 +90,7 @@ async function editor(main, tipo, id) {
   let reg = id ? await cargar(tipo, id) : { estado: "borrador" };
   let fotos = esAlbum && id ? await cargarFotos(id) : [];
   let archivoPortada = null; // portada nueva elegida (noticias), se sube al guardar
+  let portadaEnProceso = null; // mientras se reduce la foto elegida, «Guardar» espera
 
   /* ---- Controles ---- */
   const titulo = h("input", { type: "text", required: true, maxlength: 160, placeholder: esAlbum ? "Final Sub 17 · Futsal Paranaense" : "Título de la noticia" });
@@ -147,6 +148,7 @@ async function editor(main, tipo, id) {
 
   async function guardar() {
     if (!form.reportValidity()) throw new Error("Completá los campos obligatorios.");
+    if (portadaEnProceso) await portadaEnProceso;
     const datos = datosFormulario();
     if (!datos.slug) throw new Error("Escribí un título.");
     if (reg.id) {
@@ -279,18 +281,20 @@ async function editor(main, tipo, id) {
     const vistaPortada = h("img", { class: "portada__img", alt: "" });
     const entrada = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp" });
     if (reg.portada_path) F.urlsParaVer(app.sb, [reg.portada_path]).then((u) => { vistaPortada.src = u[reg.portada_path]; });
-    entrada.addEventListener("change", async () => {
+    entrada.addEventListener("change", () => {
       const archivo = entrada.files[0];
       if (!archivo) return;
-      try {
-        const preparada = await prepararFoto(archivo);
-        archivoPortada = preparada.archivo;
-        vistaPortada.src = URL.createObjectURL(archivoPortada);
-        aviso("Portada lista. Se sube al tocar «Guardar».");
-      } catch (e) {
-        entrada.value = "";
-        aviso(errorAmigable(e), "error");
-      }
+      portadaEnProceso = prepararFoto(archivo)
+        .then((preparada) => {
+          archivoPortada = preparada.archivo;
+          vistaPortada.src = URL.createObjectURL(archivoPortada);
+          aviso("Portada lista. Se sube al tocar «Guardar».");
+        })
+        .catch((e) => {
+          entrada.value = "";
+          aviso(errorAmigable(e), "error");
+        })
+        .finally(() => { portadaEnProceso = null; });
     });
     zonaPortada = h("section", { class: "bloque" },
       h("h2", { text: "Foto de portada" }),

@@ -9,7 +9,7 @@ const SLUG_AYUDA = "Se completa sola a partir del nombre. Solo minúsculas, núm
 const DEF = {
   campeonatos: {
     titulo: "Campeonatos",
-    singular: "campeonato",
+    singular: "campeonato", nuevo: "Nuevo campeonato", este: "este campeonato",
     campos: [
       { n: "nombre", l: "Nombre", t: "text", req: true, max: 120, ph: "Futsal Paranaense" },
       { n: "slug", l: "Dirección (slug)", t: "slug", de: "nombre", ayuda: SLUG_AYUDA },
@@ -26,7 +26,7 @@ const DEF = {
   },
   categorias: {
     titulo: "Categorías",
-    singular: "categoría",
+    singular: "categoría", nuevo: "Nueva categoría", este: "esta categoría",
     campos: [
       { n: "nombre", l: "Nombre", t: "text", req: true, max: 80, ph: "Sub 17, Primera, Femenino…" },
       { n: "slug", l: "Dirección (slug)", t: "slug", de: "nombre", ayuda: SLUG_AYUDA },
@@ -40,7 +40,7 @@ const DEF = {
   },
   partidos: {
     titulo: "Partidos y fechas",
-    singular: "partido",
+    singular: "partido", nuevo: "Nuevo partido", este: "este partido",
     campos: [
       { n: "campeonato_id", l: "Campeonato", t: "select", req: true, opciones: opcCampeonatos },
       { n: "categoria_id", l: "Categoría", t: "select", opciones: opcCategorias },
@@ -114,7 +114,7 @@ function abrirFormulario(tipo, registro, alGuardar) {
   const acciones = h("div", { class: "acciones" });
   if (registro) {
     acciones.appendChild(boton("Borrar", async (ev) => {
-      if (!(await confirmar("¿Borrar este " + def.singular + "? No se puede deshacer.", { aceptar: "Borrar", peligro: true }))) return;
+      if (!(await confirmar("¿Borrar " + def.este + "? No se puede deshacer.", { aceptar: "Borrar", peligro: true }))) return;
       await conBoton(ev.target, async () => {
         const { error } = await app.sb.from(tipo).delete().eq("id", registro.id);
         if (error) throw error;
@@ -143,7 +143,7 @@ function abrirFormulario(tipo, registro, alGuardar) {
     }, "Guardando…");
   });
 
-  const dlg = dialogo((registro ? "Editar " : "Nuevo ") + def.singular, form);
+  const dlg = dialogo(registro ? "Editar " + def.singular : def.nuevo, form);
   const primero = form.querySelector("input, select, textarea");
   if (primero) primero.focus();
 }
@@ -186,7 +186,7 @@ export async function vista(main, tipo) {
   vaciar(main,
     h("div", { class: "cabecera" },
       h("h1", { text: def.titulo }),
-      boton("+ Nuevo " + def.singular, () => abrirFormulario(tipo, null, refrescar), "btn--primary", { disabled: !puedeCrear })),
+      boton("+ " + def.nuevo, () => abrirFormulario(tipo, null, refrescar), "btn--primary", { disabled: !puedeCrear })),
     !puedeCrear ? h("p", { class: "nota" }, "Primero creá al menos un campeonato.") : null,
     h("div", { class: "filtros" }, buscar, filtroCamp),
     h("div", { class: "tabla-envoltura" }, tabla));

@@ -191,7 +191,7 @@ export function paginaAlbum(ctx, a) {
     ? fotos.map((f, i) => `
         <figure class="gallery__item${i === 0 ? " gallery__item--wide" : ""}" style="margin:0">
           <button class="gallery__btn" type="button" data-src="${esc(f.src)}" data-caption="${esc(f.descripcion || "")}" aria-label="Ampliar foto: ${esc(f.alt || a.titulo)}">
-            <img src="${esc(f.mini || f.src)}" alt="${esc(f.alt || a.titulo)}" loading="${i < 3 ? "eager" : "lazy"}">
+            <img src="${esc(i === 0 ? f.src : f.mini || f.src)}" alt="${esc(f.alt || a.titulo)}" loading="${i < 3 ? "eager" : "lazy"}">
           </button>
           ${f.descripcion ? `<figcaption class="gallery__caption">${esc(f.descripcion)}</figcaption>` : ""}
         </figure>`).join("")
