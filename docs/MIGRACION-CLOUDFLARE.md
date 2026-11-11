@@ -34,7 +34,11 @@ Facebook y WhatsApp no ejecutan JavaScript: leen solo el HTML que devuelve el se
 - Build command: *(vacío)*
 - Build output directory: `/`
 - Rama de producción: **`cloudflare-prueba`** (durante la prueba)
-- Variables de entorno: ninguna por ahora. En la etapa 1 se agregan `SUPABASE_URL` y `SUPABASE_ANON_KEY`. La clave `service_role` **nunca** se carga en Cloudflare ni en el repositorio.
+- Variables de entorno (Settings → Variables and Secrets, entornos Production y Preview):
+  - `SUPABASE_URL` = `https://<proyecto>.supabase.co`
+  - `SUPABASE_PUBLISHABLE_KEY` = la clave `sb_publishable_...`, que es pública.
+  - Las claves secretas (`sb_secret_...` o `service_role`) **nunca** se cargan en Cloudflare ni en el repositorio. Si se cargan por error, las funciones las rechazan.
+  - Después de cambiar variables, hay que volver a desplegar (Deployments → Retry deployment) para que se apliquen.
 
 ## Pruebas a realizar en la dirección nueva
 
