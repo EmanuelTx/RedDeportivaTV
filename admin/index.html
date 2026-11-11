@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Panel · RedDeportivaTV</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23e30613'/%3E%3Ctext x='32' y='45' font-family='Arial Black,Arial' font-weight='900' font-size='34' fill='%23fff' text-anchor='middle'%3ETV%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script type="module" src="/admin/js/app.js"></script>
+</head>
+<body class="admin">
+  <div id="avisos" class="avisos" aria-live="polite"></div>
+
+  <!-- Cargando -->
+  <section id="cargando" class="centro">
+    <p class="cargando">Cargando panel…</p>
+    <noscript><p class="error">El panel necesita JavaScript activado.</p></noscript>
+  </section>
+
+  <!-- Inicio de sesión -->
+  <section id="login" class="centro" hidden>
+    <form id="loginForm" class="login">
+      <img src="/assets/img/logo/logo-reddeportivatv.jpg" alt="RedDeportivaTV" width="834" height="375" class="login__logo">
+      <h1>Panel de administración</h1>
+      <label class="campo">
+        <span class="campo__etiqueta">Correo</span>
+        <input id="loginCorreo" type="email" autocomplete="username" required>
+      </label>
+      <label class="campo">
+        <span class="campo__etiqueta">Contraseña</span>
+        <input id="loginClave" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="loginMensaje" class="login__mensaje" role="alert"></p>
+      <button id="loginBoton" class="btn btn--primary" type="submit">Entrar</button>
+      <a class="login__volver" href="/">← Volver a la web</a>
+    </form>
+  </section>
+
+  <!-- Panel -->
+  <div id="panel" class="panel" hidden>
+    <header class="barra">
+      <button id="menuBoton" class="barra__menu" type="button" aria-label="Abrir menú">☰</button>
+      <a href="#/noticias" class="barra__logo"><img src="/assets/img/logo/logo-reddeportivatv.jpg" alt="RedDeportivaTV" width="834" height="375"></a>
+      <span class="barra__titulo">Panel</span>
+      <span class="barra__usuario" id="usuarioNombre"></span>
+      <a class="btn btn--sec btn--mini" href="/" target="_blank" rel="noopener">Ver web ↗</a>
+      <button id="salir" class="btn btn--sec btn--mini" type="button">Salir</button>
+    </header>
+    <nav class="menu" aria-label="Secciones">
+      <p class="menu__grupo">Contenido</p>
+      <a href="#/noticias" data-seccion="noticias">Noticias</a>
+      <a href="#/albumes" data-seccion="albumes">Álbumes</a>
+      <a href="#/envivo" data-seccion="envivo">En vivo</a>
+      <p class="menu__grupo">Organización</p>
+      <a href="#/campeonatos" data-seccion="campeonatos">Campeonatos</a>
+      <a href="#/categorias" data-seccion="categorias">Categorías</a>
+      <a href="#/partidos" data-seccion="partidos">Partidos y fechas</a>
+      <p class="menu__grupo">Cuenta</p>
+      <a href="#/cuenta" data-seccion="cuenta">Mi cuenta</a>
+    </nav>
+    <main id="principal" class="principal" tabindex="-1"></main>
+  </div>
+</body>
+</html>

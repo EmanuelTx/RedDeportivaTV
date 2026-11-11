@@ -1,0 +1,16 @@
+/* Franja "EN VIVO" (solo aparece cuando hay una transmisión activa) */
+.envivo {
+  position: fixed; inset: 0 0 auto; z-index: 101; height: 40px;
+  display: flex; align-items: center; justify-content: center; gap: .6rem; padding: 0 var(--gutter);
+  background: var(--red); color: var(--white); text-decoration: none;
+  font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap; overflow: hidden;
+}
+.envivo:hover { background: var(--red-dark); }
+.envivo__punto { width: 10px; height: 10px; border-radius: 50%; background: var(--white); flex: none; animation: pulse 1.6s infinite; }
+.envivo__titulo { overflow: hidden; text-overflow: ellipsis; font-weight: 600; text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
+.envivo__ver { flex: none; text-decoration: underline; }
+.hay-envivo .header { top: 40px; }
+html:has(.hay-envivo) { scroll-padding-top: calc(var(--header-h) + 40px); }
+@media (max-width: 420px) { .envivo__ver { display: none; } }
+@media (prefers-reduced-motion: reduce) { .envivo__punto { animation: none; } }

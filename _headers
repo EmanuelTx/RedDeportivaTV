@@ -10,6 +10,14 @@
 https://:project.pages.dev/*
   X-Robots-Tag: noindex, nofollow
 
+# Panel de administración: no indexar, no incrustar en otros sitios y solo
+# cargar código propio, la librería de Supabase (jsDelivr) y Supabase.
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+  X-Frame-Options: DENY
+  Cache-Control: no-cache
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+
 # Los datos de prueba y el código de las funciones no son páginas para mostrar
 /datos-prueba/*
   X-Robots-Tag: noindex, nofollow
