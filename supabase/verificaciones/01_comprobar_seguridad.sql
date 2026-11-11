@@ -1,7 +1,8 @@
 -- =====================================================================
 -- RedDeportivaTV · Comprobación de seguridad (NO deja cambios)
 -- ---------------------------------------------------------------------
--- Ejecutar DESPUÉS de la migración 1, en el editor SQL de Supabase.
+-- Ejecutar DESPUÉS de las migraciones 1 y 2, en el editor SQL de Supabase.
+-- (Las coberturas tienen además su propia verificación: 02_comprobar_coberturas.sql.)
 -- Crea datos de prueba, simula tres tipos de usuario y al final DESHACE
 -- TODO (rollback): no quedan datos, usuarios ni archivos de prueba.
 --
@@ -155,9 +156,10 @@ insert into public.campeonatos (id, nombre, slug, visible) values
 insert into public.noticias (id, slug, titulo, estado) values
   ('00000000-0000-0000-0000-0000000000b1', 'prueba-rls-publicada', 'Noticia publicada', 'publicada'),
   ('00000000-0000-0000-0000-0000000000b2', 'prueba-rls-borrador',  'Noticia borrador',  'borrador');
-insert into public.albumes (id, slug, titulo, estado) values
-  ('00000000-0000-0000-0000-0000000000a1', 'prueba-rls-album-pub', 'Álbum publicado', 'publicada'),
-  ('00000000-0000-0000-0000-0000000000a2', 'prueba-rls-album-bor', 'Álbum borrador',  'borrador');
+-- (Desde la migración 2: publicar fotos exige cobertura visible y fotos "disponibles".)
+insert into public.albumes (id, slug, titulo, estado, visible, estado_fotos) values
+  ('00000000-0000-0000-0000-0000000000a1', 'prueba-rls-album-pub', 'Álbum publicado', 'publicada', true,  'disponible'),
+  ('00000000-0000-0000-0000-0000000000a2', 'prueba-rls-album-bor', 'Álbum borrador',  'borrador',  false, 'pendiente');
 insert into public.fotos (album_id, path) values
   ('00000000-0000-0000-0000-0000000000a1', 'albumes/00000000-0000-0000-0000-0000000000a1/pub.jpg'),
   ('00000000-0000-0000-0000-0000000000a2', 'albumes/00000000-0000-0000-0000-0000000000a2/bor.jpg');
@@ -329,9 +331,9 @@ select pg_temp.probar('Usuario no admin: NO puede crear buckets', 'bloqueado',
 -- =====================================================================
 -- Publicar el álbum borrador (a2), que tiene su foto en el bucket privado
 select pg_temp.probar('Admin: NO puede pasar directo a "publicada" con fotos en el privado', 'bloqueado',
-  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicada' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicada', visible = true, estado_fotos = 'disponible' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
 select pg_temp.probar('Admin: marca el álbum como "publicando"', 'permitido (1 filas)',
-  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicando' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicando', visible = true, estado_fotos = 'disponible' where id = '00000000-0000-0000-0000-0000000000a2'$q$));
 select pg_temp.probar('Visitante: NO ve un álbum "publicando" ni sus fotos', '0 / 0',
   pg_temp.leer('anon', pg_temp.anon(), $q$select (select count(*) from public.albumes where id = '00000000-0000-0000-0000-0000000000a2') || ' / ' || (select count(*) from public.fotos where album_id = '00000000-0000-0000-0000-0000000000a2')$q$));
 select pg_temp.probar('Admin (permiso de move): pasa la foto al público mientras publica', 'permitido (1 filas)',

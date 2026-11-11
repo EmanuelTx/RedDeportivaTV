@@ -26,6 +26,29 @@ transmisiones (manuales: enlace de YouTube, EN VIVO sí/no, hora de fin)
 administradores (máximo 2, enlazados a usuarios de Supabase Auth)
 ```
 
+## Migración 2: coberturas
+
+Cada fila de `albumes` es una **cobertura**: fotos, video de YouTube y datos del partido o de la jornada. No hay otra tabla.
+
+| Columna | Para qué |
+|---|---|
+| `partido_id` | Cobertura de un partido. Campeonato, categoría, fecha y jornada se copian solos del partido. |
+| `campeonato_id`, `categoria_id`, `fecha`, `jornada` | Cobertura de una jornada o evento completo, sin partido. |
+| `visible` | Interruptor "Visible en la web". |
+| `estado_fotos` | `pendiente` · `preparacion` · `disponible` |
+| `estado_video`, `youtube_id` | `pendiente` · `edicion` · `disponible`, más el ID de 11 caracteres |
+| `estado` | Mecanismo interno que mueve los archivos entre buckets (`publicada` = fotos publicadas). |
+| `actividad_en` | Última novedad pública. Ordena la portada y el catálogo. |
+| `fotos_disponibles`, `video_publico`, `portada_publica` | Columnas calculadas que lee el visitante. |
+
+**Reglas de la base:**
+- un partido tiene como máximo una cobertura;
+- una jornada no se repite con el mismo campeonato, categoría, fecha y nombre de jornada;
+- las fotos solo van al bucket público si la cobertura es visible y está "disponible";
+- la dirección (slug) queda fija desde la primera publicación.
+
+**Verificaciones:** después de la migración 2 hay que ejecutar las dos, `verificaciones/01_…` y `verificaciones/02_comprobar_coberturas.sql`.
+
 ## Fotos: dos buckets
 
 | Bucket | ¿Se abre por URL? | Qué contiene |
