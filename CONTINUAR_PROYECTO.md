@@ -8,7 +8,7 @@ Este documento **no contiene contraseñas, claves secretas ni datos personales**
 
 ## ⚠️ Antes de empezar: 5 advertencias
 
-1. **No hagas `git push` de la rama `cloudflare-prueba` todavía.** Cloudflare Pages publica esa rama sola en https://reddeportivatv.pages.dev. El commit local `30ce1a0` necesita la **migración 2**, que todavía no está aplicada en la base real. Si se publica antes, las páginas nuevas fallan.
+1. **No hagas `git push` de la rama `cloudflare-prueba` todavía.** Cloudflare Pages publica esa rama sola en https://reddeportivatv.pages.dev. Los commits locales (`30ce1a0`, `bc24c24` y el siguiente) necesitan la **migración 2**, que todavía no está aplicada en la base real. Si se publica antes, las páginas nuevas fallan.
 2. **No ejecutes SQL en el proyecto de producción** `reddeportivatv` (identificador `mopsakafycvolxxgatga`). Cualquier prueba se hace en el proyecto de pruebas `reddeportivatv-pruebas`.
    - Antes de ejecutar cualquier SQL, confirmá el **nombre** y el **identificador** del proyecto, arriba a la izquierda en Supabase.
 3. **No toques `main`.** Es la web oficial en GitHub Pages: https://emanueltx.github.io/RedDeportivaTV/
@@ -28,7 +28,7 @@ Este documento **no contiene contraseñas, claves secretas ni datos personales**
 | **Base de datos Supabase** (Free): campeonatos, categorías, partidos, noticias, álbumes, fotos, transmisiones y 2 administradores | Migración 1 aplicada en producción |
 | **Panel `/admin`**: inicio de sesión, noticias, álbumes con fotos (reducción, portada, orden), campeonatos, categorías, partidos, EN VIVO, compartir, vista previa | Publicado en la versión de prueba (versión 1) |
 | **Fotos seguras**: bucket privado `fotos-borradores` y bucket público `fotos-publicas`, que se mueven con la Storage API; recuperación de publicaciones cortadas | Probado con fotos reales |
-| **Coberturas v2**: categorías por campeonato, jornadas, tipos de cobertura, fotos y video independientes, buscador, archivo, originales | Commit local `30ce1a0` + correcciones sin commit. **Probado en el proyecto de pruebas el 12/11/2026** (ver sección 5). Falta aplicarlo en producción. |
+| **Coberturas v2**: categorías por campeonato, jornadas, tipos de cobertura, fotos y video independientes, buscador, archivo, originales | Commits locales sin push. **Probado en el proyecto de pruebas el 12/11/2026** (ver sección 5). Falta aplicarlo en producción. |
 
 ---
 
@@ -60,7 +60,7 @@ Están en `supabase/migrations/`.
 | Migración | Producción (`reddeportivatv`) | Proyecto de pruebas |
 |---|---|---|
 | `20261110000100_esquema_inicial.sql` (migración 1) | ✅ Aplicada. Verificación 1 con **86/86 ok**. | ✅ Aplicada |
-| `20261111000100_coberturas.sql` (migración 2, **versión local con las correcciones del 12/11**) | ❌ **No aplicar todavía** (esperando aprobación del informe) | ✅ Aplicada, revertida y vuelta a aplicar. Verificación 1: 86/86; verificación 2: 79/79 |
+| `20261111000100_coberturas.sql` (migración 2, **versión local con las correcciones del 12/11**) | ❌ **No aplicar todavía** (esperando aprobación del informe) | ✅ Versión final aplicada en entorno limpio. Verificación 1: 87/87; verificación 2: 97/97 (también con coberturas nuevas cargadas) |
 
 **Otros archivos:**
 - **Verificaciones**, que terminan con `rollback` y no dejan cambios: `supabase/verificaciones/01_comprobar_seguridad.sql` y `02_comprobar_coberturas.sql`.
@@ -84,7 +84,7 @@ Están en `supabase/migrations/`.
 | `origin/main` (`574d08f`) | Web oficial, GitHub Pages. **No tocar.** |
 | `origin/cloudflare-prueba` (`806a59e`) | Lo que está online en reddeportivatv.pages.dev: panel v1, álbumes, noticias, EN VIVO, migración 1. También incluye un **borrador viejo** de la migración 2 que el commit local reemplaza. |
 | **Commit local `30ce1a0`** (sin push) | Coberturas v2 completas: migración 2 reescrita, verificaciones 01 y 02, reversión, web nueva y panel nuevo |
-| **Cambios locales sin commit** | Correcciones de la migración 2 encontradas en las pruebas (permiso de `texto_busqueda`, bucket de originales repetible, umbrales del buscador, falso duplicado) y la verificación 1 ajustada; `pruebas/almacenamiento.js` (prueba de fotos reales adaptada a v2); `pruebas/legado.html` y `legado.js` (suben las fotos del álbum anterior al proyecto de pruebas); `supabase/pruebas/01_datos_equivalentes.sql` (nuevo) |
+| **Commits locales `bc24c24` y siguiente** (sin push) | Estados públicos de fotos y video, «no tendrá», orden por fecha real o agregadas recientemente, nombres de jornadas sin ambigüedad, verificaciones con RESUMEN, correcciones de las pruebas y archivos de prueba |
 | Solo local, ignorado por git | `respaldos/`, `imagenes/`, `.claude/` |
 
 > **Para no perder el trabajo local al cambiar de PC:** copiá la carpeta **completa** del proyecto, incluida la carpeta oculta `.git`, con un pendrive o Google Drive. Así viajan el commit local, los cambios sin commit y el respaldo. **No uses `git clone`:** el commit local no está en GitHub.
@@ -96,15 +96,12 @@ Están en `supabase/migrations/`.
 ## 5. Pruebas en el proyecto de pruebas
 
 > **Resultado (12/11/2026): todos los pasos de esta lista están hechos.**
-> - Verificaciones: 86/86 y 79/79.
+> - Verificaciones (versión final, entorno limpio): 87/87 y 97/97.
 > - Storage con fotos reales: 42/42.
 > - Panel: los 3 casos más coberturas de jornada, de campeonato y de evento.
 > - Páginas públicas generadas con el código nuevo contra la base de pruebas.
 >
-> Problemas abiertos (para decidir antes de producción):
-> 1. Las páginas dicen «Video resumen en edición» y «Más contenido pronto» aunque el video esté solo «pendiente», es decir, aunque nadie lo esté editando. La web pública no puede ver `estado_video`.
-> 2. El selector de jornadas sin categoría muestra dos «Fecha 2» iguales (Libre y Senior).
-> 3. La prueba 8 de la verificación 2 solo vale justo después de aplicar la migración: cuando ya hay coberturas nuevas, falla.
+> Los 3 problemas del primer informe (textos de video «en edición», «Fecha 2» repetida, prueba 8) quedaron corregidos y probados el 12/11/2026. Sin problemas abiertos de código; falta aplicar en producción.
 
 Pasos que se siguieron:
 1. Crear el proyecto (Free, São Paulo, Data API activada, "Automatically expose new tables" desactivado, RLS automático) y un usuario administrador de prueba con un **correo inventado**, por ejemplo `admin-prueba@reddeportivatv.test`.
@@ -155,7 +152,7 @@ Pasos que se siguieron:
    ```bash
    git status -sb
    ```
-   Tiene que mostrar `cloudflare-prueba … [ahead 1]` y el commit `30ce1a0` en `git log --oneline -3`.
+   Tiene que mostrar `cloudflare-prueba … [ahead N]` y los commits locales en `git log --oneline -3`.
 4. **Configurar la identidad de los commits** (correo anónimo de GitHub):
    ```bash
    git config user.email "EmanuelTx@users.noreply.github.com"

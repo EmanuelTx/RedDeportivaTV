@@ -60,6 +60,7 @@ create table if not exists private.migraciones (
   nombre      text primary key,
   aplicada_en timestamptz not null default now()
 );
+alter table private.migraciones enable row level security;  -- sin políticas: nadie de afuera
 revoke all on private.migraciones from public, anon, authenticated;
 insert into private.migraciones (nombre) values ('20261111000100_coberturas');
 
