@@ -6,7 +6,8 @@
    - Los partidos de una jornada se ordenan con ↑ ↓.
    ========================================================= */
 import { app, recargarCatalogos, opcCampeonatos, opcCategorias, nombreCampeonato, nombreCategoria,
-  nombreJornada, etiquetaPartido, jornadaPorId, campeonatoPorId, categoriaPorId, slugJornada } from "./estado.js";
+  nombreJornada, etiquetaPartido, jornadaPorId, campeonatoPorId, categoriaPorId, slugJornada,
+  etiquetasJornadas, nombreJornadaClaro } from "./estado.js";
 import { h, vaciar, aviso, dialogo, confirmar, campo, opciones, boton, conBoton, slugify, fechaCorta, errorAmigable } from "./ui.js";
 
 const SLUG_AYUDA = "Se completa sola. Es parte de la dirección en la web: solo minúsculas, números y guiones.";
@@ -149,9 +150,10 @@ function abrirFormulario(tipo, registro, alGuardar, inicial = {}) {
   function pintarJornadas(valor) {
     if (!ctl.jornada_id) return;
     const camp = ctl.campeonato_id.value;
-    const lista = app.cat.jornadas
-      .filter((j) => j.campeonato_id === camp && (!ctl.categoria_id.value || j.categoria_id === ctl.categoria_id.value))
-      .map((j) => ({ valor: j.id, texto: j.nombre + (j.categoria_id ? " · " + nombreCategoria(j.categoria_id) : "") + (j.fecha ? " · " + fechaCorta(j.fecha) : "") }));
+    const visibles = app.cat.jornadas
+      .filter((j) => j.campeonato_id === camp && (!ctl.categoria_id.value || j.categoria_id === ctl.categoria_id.value));
+    const nombres = etiquetasJornadas(visibles);
+    const lista = visibles.map((j, i) => ({ valor: j.id, texto: nombres[i] + (j.fecha ? " · " + fechaCorta(j.fecha) : "") }));
     if (camp) lista.push({ valor: NUEVA, texto: "+ Nueva jornada…" });
     opciones(ctl.jornada_id, lista, { vacio: "— Sin jornada —", valor });
     ctl.jornada_id.disabled = !camp;
@@ -276,7 +278,7 @@ export async function vista(main, tipo, params = []) {
   const pintarFiltroJornada = (valor) => {
     if (!fJor) return;
     const js = app.cat.jornadas.filter((j) => !fCamp.value || j.campeonato_id === fCamp.value)
-      .map((j) => ({ valor: j.id, texto: (fCamp.value ? "" : nombreCampeonato(j.campeonato_id) + " · ") + j.nombre + (j.categoria_id ? " · " + nombreCategoria(j.categoria_id) : "") }));
+      .map((j) => ({ valor: j.id, texto: (fCamp.value ? "" : nombreCampeonato(j.campeonato_id) + " · ") + nombreJornadaClaro(j.id) }));
     opciones(fJor, js, { vacio: "Todas las jornadas", valor });
   };
   pintarFiltroJornada(jornadaInicial);

@@ -98,9 +98,27 @@ export async function catalogos(ctx) {
   return { campeonatos, categorias, jornadas, campeonato: porId(campeonatos), categoria: porId(categorias), jornada: porId(jornadas) };
 }
 
+/* Nombres de jornadas para un selector: si en la lista hay dos jornadas con
+   el mismo nombre (p. ej. "Fecha 2" de Libre y de Senior), se agrega la
+   categoría: "Fecha 2 — Libre", "Fecha 2 — Senior". */
+export function etiquetasJornadas(lista, cat) {
+  const clave = (n) => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+  const veces = {};
+  for (const j of lista) veces[clave(j.nombre)] = (veces[clave(j.nombre)] || 0) + 1;
+  return lista.map((j) => {
+    if (veces[clave(j.nombre)] < 2) return j.nombre;
+    const k = (cat.categoria || {})[j.categoria_id];
+    return j.nombre + " — " + (k ? k.nombre : "Sin categoría");
+  });
+}
+
+export const ORDENES = ["fecha", "reciente"];
+
 /* ---------- Búsqueda ---------- */
 
-/* Filtros de la URL (?q=&campeonato=&categoria=&jornada=&tipo=&anio=&mes=&desde=&hasta=&pagina=)
+/* Filtros de la URL (?q=&campeonato=&categoria=&jornada=&tipo=&anio=&mes=&desde=&hasta=&orden=&pagina=)
+   orden: "fecha" (predeterminado, fecha real del partido o evento) o
+   "reciente" (agregadas o completadas últimamente, aunque sean antiguas).
    → parámetros de buscar_coberturas. Los filtros usan direcciones (slugs). */
 export function leerFiltros(url, cat) {
   const p = url.searchParams;
@@ -114,6 +132,7 @@ export function leerFiltros(url, cat) {
     mes: p.get("mes") || "",
     desde: p.get("desde") || "",
     hasta: p.get("hasta") || "",
+    orden: ORDENES.includes(p.get("orden")) ? p.get("orden") : "fecha",
     pagina: Math.min(Math.max(parseInt(p.get("pagina") || "1", 10) || 1, 1), 50)
   };
   const camp = cat.campeonatos.find((c) => c.slug === f.campeonato) || null;
@@ -150,7 +169,7 @@ export function leerFiltros(url, cat) {
     p_tipo: f.tipo || null,
     p_desde: desde,
     p_hasta: hasta,
-    p_orden: desde || hasta ? "fecha" : "reciente"
+    p_orden: f.orden
   };
   f.activos = ["q", "campeonato", "categoria", "jornada", "tipo", "anio", "desde", "hasta"].filter((k) => f[k]).length;
   return f;
@@ -182,9 +201,20 @@ function tarjetaDesdeFila(cfg, cat, f) {
     jornada: jorn ? jorn.nombre : "",
     fotos: Boolean(f.fotos_disponibles),
     video: f.video_publico || null,
+    estadoFotos: estadoPublico(f.fotos_estado_publico, f.fotos_disponibles),
+    estadoVideo: estadoPublico(f.video_estado_publico, f.video_publico),
     imagen: f.portada_publica ? urlPublica(cfg, rutaMini(f.portada_publica)) : miniaturaYoutube(f.video_publico),
     imagenAlternativa: f.portada_publica ? urlPublica(cfg, f.portada_publica) : miniaturaYoutube(f.video_publico, "mqdefault")
   };
+}
+
+/* Estado público de fotos o video: disponible | preparacion/edicion |
+   pendiente | no_aplica. Lo calcula la base; "disponible" se confirma con
+   el contenido realmente publicado (nunca se muestra algo que no lo está). */
+const ESTADOS = ["disponible", "preparacion", "edicion", "pendiente", "no_aplica"];
+function estadoPublico(estado, contenido) {
+  if (contenido) return "disponible";
+  return ESTADOS.includes(estado) && estado !== "disponible" ? estado : "pendiente";
 }
 
 /* Las fotos se guardan como <base>.jpg y su miniatura como <base>-mini.jpg.
@@ -202,7 +232,7 @@ export async function archivo(ctx) {
 
 const COLUMNAS_COBERTURA =
   "id,slug,titulo,descripcion,fecha,tipo,portada_publica,portada_alt,publicado_en,actualizado_en," +
-  "fotos_disponibles,video_publico,campeonato_id,categoria_id,jornada_id," +
+  "fotos_disponibles,video_publico,fotos_estado_publico,video_estado_publico,campeonato_id,categoria_id,jornada_id," +
   "partido:partidos(equipo_local,equipo_visitante,goles_local,goles_visitante,fecha,hora,lugar,fase,orden)," +
   "fotos(path,mini_path,ancho,alto,alt,descripcion,orden)";
 
@@ -233,6 +263,8 @@ export async function obtenerCobertura(ctx, slug, cat) {
     partido: a.partido || null,
     fotosDisponibles: Boolean(a.fotos_disponibles),
     video: a.video_publico || null,
+    estadoFotos: estadoPublico(a.fotos_estado_publico, a.fotos_disponibles && fotos.length),
+    estadoVideo: estadoPublico(a.video_estado_publico, a.video_publico),
     portada: urlPublica(cfg, a.portada_publica) || (fotos[0] && fotos[0].src) || miniaturaYoutube(a.video_publico, "hqdefault"),
     portada_alt: a.portada_alt || "",
     fotos: a.fotos_disponibles ? fotos : []
@@ -280,7 +312,7 @@ export async function obtenerCampeonato(ctx, slugCampeonato, slugCategoria, cat)
   const categorias = cat.categorias.filter((k) => k.campeonato_id === campeonato.id);
   const jornadas = cat.jornadas.filter((j) => j.campeonato_id === campeonato.id && (!categoria || j.categoria_id === categoria.id));
   const recientes = await buscar(ctx, cat, {
-    p_campeonato: campeonato.id, p_categoria: categoria ? categoria.id : null, p_orden: "reciente"
+    p_campeonato: campeonato.id, p_categoria: categoria ? categoria.id : null, p_orden: "fecha"
   }, { limite: 12 });
   return { campeonato, categoria, categorias, jornadas, recientes };
 }

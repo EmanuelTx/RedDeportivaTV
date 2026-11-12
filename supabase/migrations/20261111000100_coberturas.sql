@@ -22,9 +22,18 @@
 --   publicado_en  : primera vez que se hizo pública
 --   creado_en     : creación del registro
 --
+-- Estados de fotos y de video (independientes):
+--   fotos: pendiente → preparacion → disponible   ·   no_aplica (no tendrá)
+--   video: pendiente → edicion     → disponible   ·   no_aplica (no tendrá)
+--   El visitante solo lee el estado PÚBLICO calculado (fotos_estado_publico,
+--   video_estado_publico): nunca el enlace de un video que no está
+--   disponible ni rutas de fotos que no estén publicadas.
+--
 -- Datos existentes: NO se borran ni se cambian valores existentes.
 --   * Los álbumes existentes quedan como tipo "pendiente", con sus fotos,
 --     su dirección y su visibilidad actual (sin tocar actualizado_en).
+--     Como nunca tuvieron video, su video queda "no_aplica" (la web no
+--     promete un video que no existe); se puede cambiar desde el panel.
 --   * Partidos, campeonatos, noticias, transmisiones y fotos: intactos.
 --   * Si hubiera categorías cargadas (hoy hay 0), la migración se detiene
 --     sin cambiar nada, para asignarlas a su campeonato a mano.
@@ -44,6 +53,15 @@ begin
   end if;
 end;
 $$;
+
+-- Registro de migraciones aplicadas (privado). Sirve para distinguir el
+-- contenido HEREDADO (creado antes de esta migración) del creado después.
+create table if not exists private.migraciones (
+  nombre      text primary key,
+  aplicada_en timestamptz not null default now()
+);
+revoke all on private.migraciones from public, anon, authenticated;
+insert into private.migraciones (nombre) values ('20261111000100_coberturas');
 
 -- Extensiones gratuitas de PostgreSQL incluidas en Supabase
 create extension if not exists unaccent with schema extensions;
@@ -130,9 +148,9 @@ alter table public.albumes
   add column jornada_id    uuid references public.jornadas (id) on delete restrict,
   add column visible       boolean not null default false,
   add column estado_fotos  text not null default 'pendiente'
-                           check (estado_fotos in ('pendiente', 'preparacion', 'disponible')),
+                           check (estado_fotos in ('pendiente', 'preparacion', 'disponible', 'no_aplica')),
   add column estado_video  text not null default 'pendiente'
-                           check (estado_video in ('pendiente', 'edicion', 'disponible')),
+                           check (estado_video in ('pendiente', 'edicion', 'disponible', 'no_aplica')),
   add column youtube_id    text check (youtube_id ~ '^[A-Za-z0-9_-]{11}$'),
   add column actividad_en  timestamptz,
   add column busqueda      text not null default '';
@@ -147,7 +165,8 @@ alter table public.fotos
 alter table public.albumes disable trigger tocar_actualizado;
 alter table public.albumes disable trigger marcar_publicacion;
 update public.albumes
-   set visible = true, estado_fotos = 'disponible', actividad_en = coalesce(publicado_en, creado_en)
+   set visible = true, estado_fotos = 'disponible', estado_video = 'no_aplica',
+       actividad_en = coalesce(publicado_en, creado_en)
  where estado in ('publicando', 'publicada');
 alter table public.albumes enable trigger tocar_actualizado;
 alter table public.albumes enable trigger marcar_publicacion;
@@ -159,7 +178,22 @@ alter table public.albumes
   add column video_publico     text
              generated always as (case when estado_video = 'disponible' then youtube_id end) stored,
   add column portada_publica   text
-             generated always as (case when estado = 'publicada' then portada_path end) stored;
+             generated always as (case when estado = 'publicada' then portada_path end) stored,
+  -- Estado público: qué mensaje ve el visitante. "disponible" solo cuando
+  -- el contenido realmente se publicó; mientras las fotos se mueven al
+  -- bucket público o el video no tiene enlace, se informa "en preparación".
+  add column fotos_estado_publico text
+             generated always as (case
+               when estado = 'publicada'                 then 'disponible'
+               when estado_fotos = 'no_aplica'           then 'no_aplica'
+               when estado_fotos in ('preparacion', 'disponible') or estado = 'publicando' then 'preparacion'
+               else 'pendiente' end) stored,
+  add column video_estado_publico text
+             generated always as (case
+               when estado_video = 'disponible' and youtube_id is not null then 'disponible'
+               when estado_video = 'no_aplica'           then 'no_aplica'
+               when estado_video in ('edicion', 'disponible') then 'edicion'
+               else 'pendiente' end) stored;
 
 -- Reglas por tipo
 alter table public.albumes
@@ -377,6 +411,11 @@ revoke all on function
   from public, anon, authenticated;
 -- normalizar la usan las búsquedas que ejecuta el visitante
 grant execute on function private.normalizar(text) to anon, authenticated;
+-- texto_busqueda la llama el disparador preparar_cobertura con los permisos
+-- de quien guarda la cobertura (en la práctica, un administrador: RLS no
+-- deja escribir a nadie más). Sin este permiso nadie podría guardar.
+-- (Error detectado en el proyecto de pruebas, 12/11/2026.)
+grant execute on function private.texto_busqueda(public.albumes) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 5. Funciones de búsqueda (respetan RLS: SECURITY INVOKER)
@@ -393,7 +432,7 @@ create function public.buscar_coberturas(
   p_tipo       text    default null,
   p_desde      date    default null,
   p_hasta      date    default null,
-  p_orden      text    default 'reciente',   -- 'reciente' | 'fecha'
+  p_orden      text    default 'fecha',      -- 'fecha' (del partido/evento) | 'reciente' (agregadas o actualizadas)
   p_limite     integer default 24,
   p_offset     integer default 0,
   p_con_video  boolean default null)        -- true: solo coberturas con video publicado
@@ -401,6 +440,7 @@ returns table (
   id uuid, slug text, titulo text, tipo text, fecha date,
   campeonato_id uuid, categoria_id uuid, jornada_id uuid, partido_id uuid,
   portada_publica text, video_publico text, fotos_disponibles boolean,
+  fotos_estado_publico text, video_estado_publico text,
   actividad_en timestamptz, publicado_en timestamptz,
   relevancia real, total bigint)
 language sql
@@ -418,7 +458,8 @@ as $$
                                  'partidos','fotos','foto','video','videos','en','a','al','cobertura')
   ), filas as (
     select a.id, a.slug, a.titulo, a.tipo, a.fecha, a.campeonato_id, a.categoria_id, a.jornada_id,
-           a.partido_id, a.portada_publica, a.video_publico, a.fotos_disponibles, a.actividad_en,
+           a.partido_id, a.portada_publica, a.video_publico, a.fotos_disponibles,
+           a.fotos_estado_publico, a.video_estado_publico, a.actividad_en,
            a.publicado_en,
            case when cardinality(tt.palabras) = 0 then 0::real
                 else ((select count(*) from unnest(tt.palabras) w where a.busqueda like '%' || w || '%')
@@ -433,18 +474,30 @@ as $$
       and (p_desde      is null or a.fecha >= p_desde)
       and (p_hasta      is null or a.fecha <= p_hasta)
       and (p_con_video  is null or ((a.video_publico is not null) = p_con_video))
-      -- Cada palabra tiene que aparecer, exacta o con un error leve de tipeo
+      -- Cada palabra tiene que aparecer, exacta o con un error leve de tipeo.
+      -- Umbral 0,5 medido en el proyecto de pruebas: "alemnia"→Alemania 0,545;
+      -- palabras de otros partidos o categorías ≤ 0,333.
+      -- Años, números y meses se exigen EXACTOS ("2024" no es "2026",
+      -- "setiembre" no es "noviembre").
       and not exists (
         select 1 from unnest(tt.palabras) w
         where not (a.busqueda like '%' || w || '%'
-                   or (length(w) >= 4 and extensions.word_similarity(w, a.busqueda) >= 0.6)))
+                   or (length(w) >= 4 and w !~ '[0-9]'
+                       and w not in ('enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+                                     'septiembre','setiembre','octubre','noviembre','diciembre')
+                       and extensions.word_similarity(w, a.busqueda) >= 0.5)))
   )
   select f.id, f.slug, f.titulo, f.tipo, f.fecha, f.campeonato_id, f.categoria_id, f.jornada_id,
-         f.partido_id, f.portada_publica, f.video_publico, f.fotos_disponibles, f.actividad_en,
+         f.partido_id, f.portada_publica, f.video_publico, f.fotos_disponibles,
+         f.fotos_estado_publico, f.video_estado_publico, f.actividad_en,
          f.publicado_en, f.relevancia, count(*) over ()
   from filas f
+  -- 'fecha': primero los partidos y eventos más recientes según su fecha
+  --          REAL; lo que no tiene fecha confirmada va al final.
+  -- 'reciente': lo agregado o completado últimamente (aunque sea antiguo).
   order by f.relevancia desc,
-           case when p_orden = 'fecha' then f.fecha end desc nulls last,
+           case when p_orden = 'reciente' then coalesce(f.actividad_en, f.publicado_en) end desc nulls last,
+           f.fecha desc nulls last,
            coalesce(f.actividad_en, f.publicado_en) desc nulls last,
            f.id
   limit least(greatest(coalesce(p_limite, 24), 1), 100)
@@ -484,7 +537,11 @@ as $$
   where (p_excluir is null or a.id <> p_excluir)
     and ((p_partido is not null and a.partido_id = p_partido)
       or (p_jornada is not null and a.jornada_id = p_jornada and a.tipo = 'jornada')
-      or (coalesce(p_titulo, '') <> ''
+      -- Títulos parecidos: solo entre coberturas generales. Las de partido ya
+      -- tienen su control (un partido = una cobertura) y sus títulos se
+      -- parecen siempre ("Equipo A vs. Equipo B" / "Equipo C vs. Equipo D").
+      -- (Falso positivo detectado en el proyecto de pruebas, 12/11/2026.)
+      or (p_partido is null and a.partido_id is null and coalesce(p_titulo, '') <> ''
           and (p_campeonato is null or a.campeonato_id = p_campeonato)
           and (p_fecha is null or a.fecha is null or abs(a.fecha - p_fecha) <= 7)
           and extensions.similarity(private.normalizar(a.titulo), private.normalizar(p_titulo)) >= 0.5))
@@ -530,7 +587,8 @@ grant execute on function public.uso_almacenamiento() to authenticated;
 alter policy "Visitantes leen albumes publicados" on public.albumes
   using (visible and (estado = 'publicada' or estado_video = 'disponible'));
 
-grant select (tipo, jornada_id, actividad_en, fotos_disponibles, video_publico, portada_publica, busqueda)
+grant select (tipo, jornada_id, actividad_en, fotos_disponibles, video_publico, portada_publica, busqueda,
+              fotos_estado_publico, video_estado_publico)
   on public.albumes to anon;
 revoke select (portada_path) on public.albumes from anon;  -- usa portada_publica
 -- fotos.original_path / original_bytes: sin permiso para el visitante.
@@ -554,8 +612,12 @@ grant all on public.jornadas to service_role;
 --    La web usa versiones optimizadas; el original se guarda solo si se
 --    elige en el panel y hay espacio. Nunca es público.
 -- ---------------------------------------------------------------------
+-- Si el bucket ya existiera (por ejemplo, tras una reversión), se fuerza a
+-- PRIVADO con estos límites: nunca puede quedar público.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
-  ('fotos-originales', 'fotos-originales', false, 52428800, array['image/jpeg', 'image/png', 'image/webp']);
+  ('fotos-originales', 'fotos-originales', false, 52428800, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 create policy "Admins ven originales" on storage.objects
   for select to authenticated

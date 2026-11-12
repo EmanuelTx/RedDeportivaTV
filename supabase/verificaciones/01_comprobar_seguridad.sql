@@ -127,9 +127,9 @@ select 'EXECUTE: el visitante solo puede usar', 'album_publicado, normalizar',
 from pg_proc where pronamespace = 'private'::regnamespace and has_function_privilege('anon', oid, 'EXECUTE');
 
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'EXECUTE: un usuario con sesión solo puede usar', 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida',
+select 'EXECUTE: un usuario con sesión solo puede usar', 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida, texto_busqueda',
        coalesce(string_agg(proname, ', ' order by proname), '(ninguna)'),
-       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida'
+       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida, texto_busqueda'
 from pg_proc where pronamespace = 'private'::regnamespace and has_function_privilege('authenticated', oid, 'EXECUTE');
 
 with tablas(t) as (values ('administradores'),('campeonatos'),('categorias'),('partidos'),('noticias'),('albumes'),('fotos'),('transmisiones')),
@@ -395,9 +395,23 @@ begin
 end;
 $$;
 
+-- Registro privado de migraciones: nadie de afuera lo lee ni lo cambia
+insert into resultados (prueba, esperado, obtenido, ok)
+select 'Registro de migraciones: sin acceso para visitantes ni usuarios', '(ninguno)',
+       coalesce(string_agg(r || ':' || p, ', ') filter (where has_table_privilege(r, 'private.migraciones', p)), '(ninguno)'),
+       not bool_or(has_table_privilege(r, 'private.migraciones', p))
+from unnest(array['anon', 'authenticated']) r, unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']) p;
+
 -- =====================================================================
--- Resultado
+-- Resultado: primera fila = RESUMEN con el total real; después, las que fallaron
 -- =====================================================================
-select n, ok, prueba, esperado, obtenido from resultados order by ok, n;
+select n, ok, prueba, esperado, obtenido from (
+  select 0 as n, coalesce(bool_and(ok), false) as ok,
+         'RESUMEN: ' || count(*) filter (where ok) || ' de ' || count(*) || ' pruebas ok' as prueba,
+         count(*)::text as esperado, (count(*) filter (where ok))::text as obtenido
+  from resultados
+  union all
+  select n, ok, prueba, esperado, obtenido from resultados) x
+order by (n = 0) desc, ok, n;
 
 rollback;  -- deshace TODO: datos, usuarios y registros de prueba

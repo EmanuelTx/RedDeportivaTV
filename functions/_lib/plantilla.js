@@ -6,6 +6,8 @@
    Todo dato se escapa con esc(): nunca se inserta HTML del contenido.
    ========================================================= */
 
+import { etiquetasJornadas } from "./datos.js";
+
 const SITIO = "RedDeportivaTV";
 const IMAGEN_POR_DEFECTO = "/assets/img/fotos/futbol-duelo-1600.jpg";
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -171,12 +173,30 @@ function rutaCampeonato(c) { return "/campeonatos/" + c.slug; }
 function rutaCategoria(c, k) { return "/campeonatos/" + c.slug + "/" + k.slug; }
 function rutaJornada(j) { return "/jornadas/" + j.slug; }
 
+/* Textos por estado público. Lo que "no_aplica" no se menciona: la web
+   nunca promete contenido que no va a existir. */
+const AVISO_FOTOS = {
+  preparacion: { corto: "Fotos en preparación", titulo: "Estamos preparando las fotografías", texto: "Van a estar disponibles en esta misma página." },
+  pendiente: { corto: "Fotos próximamente", titulo: "Fotografías próximamente", texto: "Las fotos de esta cobertura todavía no están cargadas." }
+};
+const AVISO_VIDEO = {
+  edicion: { corto: "Video en edición", titulo: "Estamos preparando el video resumen", texto: "Va a estar disponible en esta misma página." },
+  pendiente: { corto: "Video próximamente", titulo: "Video resumen próximamente", texto: "Todavía no hay video resumen de esta cobertura." }
+};
+
 function indicadores(t) {
   const partes = [];
   if (t.fotos) partes.push('<span class="ind ind--fotos">Fotos</span>');
   if (t.video) partes.push('<span class="ind ind--video">Video</span>');
-  if (!t.fotos || !t.video) partes.push('<span class="ind ind--prep">' + (t.fotos || t.video ? "Más contenido pronto" : "En preparación") + "</span>");
-  return `<div class="ind-lista">${partes.join("")}</div>`;
+  const af = !t.fotos && AVISO_FOTOS[t.estadoFotos];
+  const av = !t.video && AVISO_VIDEO[t.estadoVideo];
+  if (af) partes.push('<span class="ind ind--prep">' + af.corto + "</span>");
+  if (av) partes.push('<span class="ind ind--prep">' + av.corto + "</span>");
+  return partes.length ? `<div class="ind-lista">${partes.join("")}</div>` : "";
+}
+
+function avisoContenido(a, id) {
+  return a ? `<section class="cob-aviso"${id ? ` id="${id}"` : ""}><p class="cob-aviso__titulo">${esc(a.titulo)}</p><p>${esc(a.texto)}</p></section>` : "";
 }
 
 export function tarjeta(t, { cargaInmediata = false } = {}) {
@@ -257,7 +277,7 @@ export function paginaCobertura(ctx, c) {
         </div>
         <p class="cob-video__alternativa">¿No se reproduce? <a href="https://www.youtube.com/watch?v=${esc(c.video)}" target="_blank" rel="noopener">Ver en YouTube ↗</a></p>
       </section>`
-    : `<section class="cob-aviso" id="video"><p class="cob-aviso__titulo">Video resumen en edición</p><p>Próximamente disponible.</p></section>`;
+    : avisoContenido(AVISO_VIDEO[c.estadoVideo], "video");
 
   const galeria = c.fotosDisponibles && c.fotos.length
     ? `<section class="cob-galeria" aria-label="Fotografías">
@@ -271,7 +291,7 @@ export function paginaCobertura(ctx, c) {
           </figure>`).join("")}
         </div>
       </section>`
-    : `<section class="cob-aviso"><p class="cob-aviso__titulo">Fotografías próximamente disponibles</p><p>Estamos preparando las fotos de esta cobertura.</p></section>`;
+    : avisoContenido(AVISO_FOTOS[c.estadoFotos], "fotos");
 
   const cuerpo = `
     <article class="container pub__articulo pub__articulo--ancho cob">
@@ -306,12 +326,14 @@ export function formularioBusqueda(f, cat, { compacto = false } = {}) {
   const categorias = camp ? cat.categorias.filter((k) => k.campeonato_id === camp.id) : [];
   const categ = categorias.find((k) => k.slug === f.categoria);
   const jornadas = camp ? cat.jornadas.filter((j) => j.campeonato_id === camp.id && (!categ || j.categoria_id === categ.id)) : [];
+  const nombresJornadas = etiquetasJornadas(jornadas, cat);
   const anioActual = new Date().getUTCFullYear();
   const anios = [];
   for (let a = anioActual; a >= anioActual - 15; a--) anios.push(a);
 
   return `
       <form class="buscador${compacto ? " buscador--compacto" : ""}" action="/coberturas" method="get" role="search">
+        ${f.orden && f.orden !== "fecha" ? `<input type="hidden" name="orden" value="${esc(f.orden)}">` : ""}
         <label class="buscador__etiqueta" for="q">Buscá tus fotos y videos</label>
         <div class="buscador__fila">
           <input class="buscador__campo" id="q" name="q" type="search" value="${esc(f.q)}" placeholder="Equipo, campeonato, categoría, fecha…" autocomplete="off" enterkeyhint="search">
@@ -328,7 +350,7 @@ export function formularioBusqueda(f, cat, { compacto = false } = {}) {
               <select name="categoria" data-filtro="categoria"${categorias.length ? "" : " disabled"}>${opcion("", categorias.length ? "Todas" : "Elegí un campeonato", f.categoria)}${categorias.map((k) => opcion(k.slug, k.nombre, f.categoria)).join("")}</select>
             </label>
             <label>Jornada
-              <select name="jornada" data-filtro="jornada"${jornadas.length ? "" : " disabled"}>${opcion("", jornadas.length ? "Todas" : "Elegí un campeonato", f.jornada)}${jornadas.map((j) => opcion(j.slug, j.nombre, f.jornada)).join("")}</select>
+              <select name="jornada" data-filtro="jornada"${jornadas.length ? "" : " disabled"}>${opcion("", jornadas.length ? "Todas" : "Elegí un campeonato", f.jornada)}${jornadas.map((j, i) => opcion(j.slug, nombresJornadas[i], f.jornada)).join("")}</select>
             </label>
             <label>Tipo
               <select name="tipo">${opcion("", "Todos", f.tipo)}${opcion("partido", "Partidos", f.tipo)}${opcion("jornada", "Jornadas (general)", f.tipo)}${opcion("campeonato", "Campeonatos (general)", f.tipo)}${opcion("evento", "Eventos", f.tipo)}</select>
@@ -364,9 +386,21 @@ export function paginaCatalogo(ctx, { f, cat, resultado, arch, origenUrl }) {
   const siguiente = new URL(origenUrl);
   siguiente.searchParams.set("pagina", String(f.pagina + 1));
 
+  // Orden: por fecha real del partido o evento, o lo agregado últimamente
+  // (así se encuentran coberturas antiguas que se subieron hace poco).
+  const urlOrden = (orden) => {
+    const u = new URL(origenUrl);
+    u.searchParams.delete("pagina");
+    if (orden === "fecha") u.searchParams.delete("orden"); else u.searchParams.set("orden", orden);
+    return u.pathname + u.search;
+  };
+  const selectorOrden = `<nav class="orden-chips" aria-label="Ordenar coberturas"><span>Ordenar:</span>${[
+    ["fecha", "Fecha del partido o evento"], ["reciente", "Agregadas recientemente"]].map(([v, t]) =>
+    `<a href="${esc(urlOrden(v))}"${f.orden === v ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</nav>`;
+
   const encabezado = hayBusqueda
     ? `<p class="resultados__cuenta">${resultado.total === 1 ? "1 cobertura" : esc(resultado.total) + " coberturas"}${f.q ? ` para «${esc(f.q)}»` : ""}</p>`
-    : `<h2 class="cob-subtitulo">Coberturas recientes</h2>`;
+    : `<h2 class="cob-subtitulo">${f.orden === "reciente" ? "Agregadas recientemente" : "Últimas coberturas"}</h2>`;
 
   const vacio = `
       <div class="sin-resultados">
@@ -374,7 +408,7 @@ export function paginaCatalogo(ctx, { f, cat, resultado, arch, origenUrl }) {
         <ul>
           <li>Revisá cómo está escrito o probá con menos palabras (por ejemplo, solo el equipo).</li>
           <li>Quitá algún filtro: <a href="/coberturas${f.q ? "?q=" + encodeURIComponent(f.q) : ""}">buscar sin filtros</a>.</li>
-          <li>Explorá el <a href="/coberturas/archivo">archivo por año y mes</a> o las <a href="/coberturas">coberturas recientes</a>.</li>
+          <li>Explorá el <a href="/coberturas/archivo">archivo por año y mes</a>, las <a href="/coberturas">últimas coberturas</a> o las <a href="/coberturas?orden=reciente">agregadas recientemente</a>.</li>
         </ul>
       </div>`;
 
@@ -387,6 +421,7 @@ export function paginaCatalogo(ctx, { f, cat, resultado, arch, origenUrl }) {
       ${chipsArchivo(arch)}
       <div class="resultados" aria-live="polite">
         ${encabezado}
+        ${selectorOrden}
         ${mostrados ? `<div class="tarjetas" id="tarjetas">${resultado.items.map((t, i) => tarjeta(t, { cargaInmediata: i < 3 })).join("")}</div>` : vacio}
         ${quedan ? `<p class="ver-mas"><a class="btn btn--ghost" id="verMas" href="${esc(siguiente.pathname + siguiente.search)}" data-pagina="${f.pagina}">Ver más</a></p>` : ""}
       </div>
@@ -494,7 +529,7 @@ export function paginaCampeonato(ctx, d) {
       ${!categoria && campeonato.descripcion ? `<p class="pub__bajada">${esc(campeonato.descripcion)}</p>` : ""}
       ${!categoria && categorias.length ? `<h2 class="cob-subtitulo">Categorías</h2><ul class="chips">${categorias.map((k) => `<li><a href="${esc(rutaCategoria(campeonato, k))}">${esc(k.nombre)}</a></li>`).join("")}</ul>` : ""}
       ${bloquesJornadas}
-      <h2 class="cob-subtitulo">Coberturas recientes</h2>
+      <h2 class="cob-subtitulo">Últimas coberturas</h2>
       ${recientes.items.length ? `<div class="tarjetas">${recientes.items.map((t) => tarjeta(t)).join("")}</div>` : `<p class="pub__vacio">Todavía no hay coberturas publicadas.</p>`}
       ${recientes.total > recientes.items.length ? `<p class="ver-mas"><a class="btn btn--ghost" href="${esc(filtro)}">Ver las ${esc(recientes.total)} coberturas</a></p>` : ""}
     </section>`;

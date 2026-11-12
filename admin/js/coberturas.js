@@ -9,7 +9,7 @@
    ========================================================= */
 import * as F from "../../js/admin/fotos-publicacion.js";
 import { app, recargarCatalogos, opcCampeonatos, opcCategorias, nombreCampeonato, nombreCategoria, nombreJornada,
-  partidoPorId, jornadaPorId, etiquetaPartido } from "./estado.js";
+  partidoPorId, jornadaPorId, etiquetaPartido, etiquetasJornadas, nombreJornadaClaro } from "./estado.js";
 import { h, vaciar, aviso, confirmar, dialogo, campo, opciones, boton, conBoton, slugify, fechaCorta, fechaHora, errorAmigable } from "./ui.js";
 import { prepararFoto } from "./imagenes.js";
 import { abrirVistaPrevia } from "./vista-previa.js";
@@ -22,8 +22,9 @@ export const TIPOS = {
   evento: "Evento deportivo",
   pendiente: "Pendiente de clasificar"
 };
-const EST_FOTOS = { pendiente: "Pendientes", preparacion: "En preparación", disponible: "Disponibles" };
-const EST_VIDEO = { pendiente: "Pendiente", edicion: "En edición", disponible: "Disponible" };
+// "no_aplica": la cobertura no tendrá fotos / video; la web no los anuncia.
+const EST_FOTOS = { pendiente: "Pendientes", preparacion: "En preparación", disponible: "Disponibles", no_aplica: "No tendrá fotos" };
+const EST_VIDEO = { pendiente: "Pendiente", edicion: "En edición", disponible: "Disponible", no_aplica: "No tendrá video" };
 const POR_PAGINA = 30;
 
 export async function vista(main, params) {
@@ -104,8 +105,9 @@ async function lista(main) {
     cargar(true);
   });
   const pintarJornadas = () => {
-    const js = app.cat.jornadas.filter((j) => j.campeonato_id === fCamp.value && (!fCat.value || j.categoria_id === fCat.value))
-      .map((j) => ({ valor: j.id, texto: j.nombre + (j.categoria_id && !fCat.value ? " · " + nombreCategoria(j.categoria_id) : "") }));
+    const lista = app.cat.jornadas.filter((j) => j.campeonato_id === fCamp.value && (!fCat.value || j.categoria_id === fCat.value));
+    const nombres = etiquetasJornadas(lista);
+    const js = lista.map((j, i) => ({ valor: j.id, texto: nombres[i] }));
     opciones(fJor, js, { vacio: "Todas las jornadas" });
     fJor.disabled = !fCamp.value;
   };
@@ -268,8 +270,9 @@ async function editor(main, id) {
     categoria.disabled = !campeonato.value || tipo.value === "partido" || tipo.value === "jornada" && false;
   }
   function pintarJornadas(valor) {
-    const js = app.cat.jornadas.filter((j) => j.campeonato_id === campeonato.value && (!categoria.value || j.categoria_id === categoria.value))
-      .map((j) => ({ valor: j.id, texto: j.nombre + (j.categoria_id && !categoria.value ? " · " + nombreCategoria(j.categoria_id) : "") + (j.fecha ? " · " + fechaCorta(j.fecha) : "") }));
+    const lista = app.cat.jornadas.filter((j) => j.campeonato_id === campeonato.value && (!categoria.value || j.categoria_id === categoria.value));
+    const nombres = etiquetasJornadas(lista);
+    const js = lista.map((j, i) => ({ valor: j.id, texto: nombres[i] + (j.fecha ? " · " + fechaCorta(j.fecha) : "") }));
     opciones(jornada, js, { vacio: tipo.value === "jornada" ? "Elegí la jornada…" : "— Todas —", valor });
     jornada.disabled = !campeonato.value;
   }
@@ -277,7 +280,7 @@ async function editor(main, id) {
     const ps = app.cat.partidos.filter((p) => (!campeonato.value || p.campeonato_id === campeonato.value)
       && (!categoria.value || p.categoria_id === categoria.value) && (!jornada.value || p.jornada_id === jornada.value))
       .sort((a, b) => (a.jornada_id === b.jornada_id ? a.orden - b.orden : 0))
-      .map((p) => ({ valor: p.id, texto: etiquetaPartido(p) + (p.jornada_id ? " · " + nombreJornada(p.jornada_id) : "") + (conCobertura.has(p.id) ? " (ya tiene cobertura)" : "") }));
+      .map((p) => ({ valor: p.id, texto: etiquetaPartido(p) + (p.jornada_id ? " · " + nombreJornadaClaro(p.jornada_id) : "") + (conCobertura.has(p.id) ? " (ya tiene cobertura)" : "") }));
     opciones(partido, ps, { vacio: "Elegí el partido…", valor });
   }
 
@@ -513,7 +516,12 @@ async function editor(main, id) {
       portada: (fotosVista.length && (urls[reg.portada_path] || fotosVista[0].src)) || (d.youtube_id ? "https://i.ytimg.com/vi/" + d.youtube_id + "/hqdefault.jpg" : null),
       portada_alt: reg.portada_alt, fotos: fotosVista,
       video: d.estado_video === "disponible" ? d.youtube_id : null,
-      avisoFotos: d.estado_fotos !== "disponible"
+      avisoFotos: d.estado_fotos !== "disponible",
+      // Mismos estados públicos que calcula la base (ver migración 2)
+      estadoFotos: d.estado_fotos === "disponible" && fotosVista.length ? "disponible"
+        : d.estado_fotos === "disponible" ? "preparacion" : d.estado_fotos,
+      estadoVideo: d.estado_video === "disponible" && d.youtube_id ? "disponible"
+        : d.estado_video === "disponible" ? "edicion" : d.estado_video
     };
   }
 
@@ -535,8 +543,8 @@ async function editor(main, id) {
     h("label", { class: "campo campo--check" }, visible, h("span", { text: "Visible en la web" })),
     h("p", { class: "nota" }, "Se muestra cuando las fotos o el video están «Disponibles». Cada uno puede completarse por separado."),
     h("div", { class: "form__fila" },
-      campo("📷 Fotos", estFotos, "Pendientes → En preparación → Disponibles"),
-      campo("▶ Video", estVideo, "Pendiente → En edición → Disponible")),
+      campo("📷 Fotos", estFotos, "Pendientes → En preparación → Disponibles. «No tendrá fotos»: la web no las anuncia."),
+      campo("▶ Video", estVideo, "Pendiente → En edición → Disponible. «No tendrá video»: la web no lo anuncia.")),
     campo("Enlace del video resumen (YouTube)", videoUrl), videoVista, videoNota);
 
   const fechas = reg.id ? h("p", { class: "nota fechas-registro" },
@@ -620,7 +628,7 @@ async function editor(main, id) {
         : "Se subieron " + lista.length + " foto(s)." + (estFotos.value !== "disponible" ? " Cuando estén listas, marcá «Fotos: Disponibles» y guardá." : "");
       if (errores.length) aviso("Algunas fotos no se subieron. Mirá el detalle debajo del recuadro.", "error");
       entrada.value = "";
-      if (estFotos.value === "pendiente") estFotos.value = "preparacion";
+      if (estFotos.value === "pendiente" || estFotos.value === "no_aplica") estFotos.value = "preparacion";
       contenedor.querySelector("h2").textContent = "Fotos (" + fotos.length + ")";
       await pintar();
     }

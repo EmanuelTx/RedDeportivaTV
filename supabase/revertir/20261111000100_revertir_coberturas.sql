@@ -65,6 +65,8 @@ alter table public.albumes
   drop constraint if exists albumes_categoria_del_campeonato,
   drop constraint if exists albumes_categoria_requiere_campeonato;
 alter table public.albumes
+  drop column if exists fotos_estado_publico,
+  drop column if exists video_estado_publico,
   drop column if exists portada_publica,
   drop column if exists video_publico,
   drop column if exists fotos_disponibles,
@@ -105,6 +107,7 @@ alter table public.categorias add constraint categorias_slug_key unique (slug);
 alter table public.categorias drop column if exists campeonato_id;
 
 drop function if exists private.normalizar(text);
+drop table if exists private.migraciones;  -- solo la usa esta migración
 -- Las extensiones unaccent y pg_trgm quedan instaladas (no molestan).
 
 commit;

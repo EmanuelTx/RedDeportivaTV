@@ -30,15 +30,21 @@ function documento(p) {
       <h1 class="pub__titulo">${esc(p.titulo || "(Sin título)")}</h1>
       ${meta ? `<p class="pub__meta">${meta}</p>` : ""}
       ${p.descripcion ? `<p class="pub__bajada">${esc(p.descripcion)}</p>` : ""}`;
+  // Mismos textos que la web pública (functions/_lib/plantilla.js)
+  const aviso = (a) => a ? `<section class="cob-aviso"><p class="cob-aviso__titulo">${a[0]}</p><p>${a[1]}</p></section>` : "";
+  const AV_VIDEO = { edicion: ["Estamos preparando el video resumen", "Va a estar disponible en esta misma página."],
+    pendiente: ["Video resumen próximamente", "Todavía no hay video resumen de esta cobertura."] };
+  const AV_FOTOS = { preparacion: ["Estamos preparando las fotografías", "Van a estar disponibles en esta misma página."],
+    pendiente: ["Fotografías próximamente", "Las fotos de esta cobertura todavía no están cargadas."] };
   const video = p.video
     ? `<section class="cob-video"><div class="cob-video__marco"><img class="cob-video__miniatura" src="https://i.ytimg.com/vi/${esc(p.video)}/hqdefault.jpg" alt=""></div>
         <p class="cob-video__alternativa">Video resumen · <a href="https://www.youtube.com/watch?v=${esc(p.video)}">Ver en YouTube ↗</a></p></section>`
-    : `<section class="cob-aviso"><p class="cob-aviso__titulo">Video resumen en edición</p><p>Próximamente disponible.</p></section>`;
+    : aviso(AV_VIDEO[p.estadoVideo || "pendiente"]);
   const cuerpo = esAlbum
     ? `<section class="container pub__articulo pub__articulo--ancho">${cabecera}
         ${video}
         ${p.avisoFotos || !p.fotos.length
-          ? `<section class="cob-aviso"><p class="cob-aviso__titulo">Fotografías próximamente disponibles</p><p>Estamos preparando las fotos de esta cobertura.</p></section>`
+          ? aviso(AV_FOTOS[p.estadoFotos === "disponible" ? "pendiente" : (p.estadoFotos || "pendiente")])
           : `<div class="gallery__grid pub__galeria">${p.fotos.map((f, i) => `
           <figure class="gallery__item${i === 0 ? " gallery__item--wide" : ""}">
             <img src="${esc(i === 0 ? f.src : f.mini || f.src)}" alt="${esc(f.alt || p.titulo)}">

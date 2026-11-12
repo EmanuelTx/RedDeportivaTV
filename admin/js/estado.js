@@ -40,6 +40,23 @@ export function nombreJornada(id) {
   const j = jornadaPorId(id);
   return j ? j.nombre : "";
 }
+/* Nombres para una lista de jornadas: si dos se llaman igual (p. ej.
+   "Fecha 2" de Libre y de Senior) se agrega la categoría:
+   "Fecha 2 — Libre", "Fecha 2 — Senior". Mismo criterio que la web. */
+const claveNombre = (n) => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+export function etiquetasJornadas(lista) {
+  const veces = {};
+  for (const j of lista) veces[claveNombre(j.nombre)] = (veces[claveNombre(j.nombre)] || 0) + 1;
+  return lista.map((j) => veces[claveNombre(j.nombre)] < 2 ? j.nombre
+    : j.nombre + " — " + (nombreCategoria(j.categoria_id) || "Sin categoría"));
+}
+/* Nombre de una jornada sin ambigüedad dentro de su campeonato. */
+export function nombreJornadaClaro(id) {
+  const j = jornadaPorId(id);
+  if (!j) return "";
+  const hermanas = app.cat.jornadas.filter((x) => x.campeonato_id === j.campeonato_id);
+  return etiquetasJornadas(hermanas)[hermanas.indexOf(j)];
+}
 export function etiquetaPartido(p) {
   if (!p) return "";
   const resultado = p.goles_local != null && p.goles_visitante != null ? " " + p.goles_local + "-" + p.goles_visitante + " " : " vs ";
@@ -62,16 +79,17 @@ export function opcCategorias(campeonatoId) {
 /* Jornadas del campeonato y, si se indica, de esa categoría. */
 export function opcJornadas(campeonatoId, categoriaId) {
   if (!campeonatoId) return [];
-  return app.cat.jornadas
-    .filter((j) => j.campeonato_id === campeonatoId && (categoriaId === undefined || (j.categoria_id || null) === (categoriaId || null)))
-    .map((j) => ({ valor: j.id, texto: j.nombre + (j.fecha ? " · " + fechaCorta(j.fecha) : "") }));
+  const lista = app.cat.jornadas
+    .filter((j) => j.campeonato_id === campeonatoId && (categoriaId === undefined || (j.categoria_id || null) === (categoriaId || null)));
+  const nombres = etiquetasJornadas(lista);
+  return lista.map((j, i) => ({ valor: j.id, texto: nombres[i] + (j.fecha ? " · " + fechaCorta(j.fecha) : "") }));
 }
 export function opcPartidos(campeonatoId, categoriaId, jornadaId) {
   return app.cat.partidos
     .filter((p) => (!campeonatoId || p.campeonato_id === campeonatoId)
       && (!categoriaId || !p.categoria_id || p.categoria_id === categoriaId)
       && (!jornadaId || p.jornada_id === jornadaId))
-    .map((p) => ({ valor: p.id, texto: etiquetaPartido(p) + (p.jornada_id ? " · " + nombreJornada(p.jornada_id) : "") }));
+    .map((p) => ({ valor: p.id, texto: etiquetaPartido(p) + (p.jornada_id ? " · " + nombreJornadaClaro(p.jornada_id) : "") }));
 }
 
 /* Dirección de una jornada: campeonato + categoría + nombre (única en el sitio). */

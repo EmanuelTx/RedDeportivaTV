@@ -119,16 +119,9 @@ async function limpiarAlbum(admin, id) {
   let estado = await F.completar(admin, "albumes", id);
   if (estado !== "borrador") estado = await F.despublicar(admin, "albumes", id);
   const prefijo = F.carpeta("albumes", id);
-  for (const bucket of [PUB, PRIV]) {
-    const rutas = await F.listar(admin, bucket, prefijo);
-    if (rutas.length) {
-      const { error } = await admin.storage.from(bucket).remove(rutas);
-      if (error) throw new Error("Borrar archivos: " + error.message);
-    }
-  }
-  const { error } = await admin.from("albumes").delete().eq("id", id);
-  if (error) throw new Error("Borrar álbum: " + error.message);
-  const quedan = (await F.listar(admin, PUB, prefijo)).length + (await F.listar(admin, PRIV, prefijo)).length;
+  await F.borrarPublicacion(admin, "albumes", id); // borra fotos web, miniaturas y originales
+  const quedan = (await F.listar(admin, PUB, prefijo)).length + (await F.listar(admin, PRIV, prefijo)).length +
+    (await F.listar(admin, F.BUCKET_ORIGINALES, prefijo)).length;
   return quedan;
 }
 
@@ -169,8 +162,10 @@ async function ejecutar() {
   const ts = Date.now();
 
   try {
+    // Cobertura de tipo "evento" con su fecha real; oculta y con fotos en preparación
     const nuevo = await admin.from("albumes")
-      .insert({ slug: "prueba-integracion-" + ts, titulo: "Prueba de integración (se borra sola)" })
+      .insert({ slug: "prueba-integracion-" + ts, titulo: "Prueba de integración (se borra sola)",
+        tipo: "evento", fecha: new Date().toISOString().slice(0, 10), estado_fotos: "preparacion", visible: false })
       .select("id").single();
     if (nuevo.error) throw new Error("Crear álbum de prueba: " + nuevo.error.message);
     albumId = nuevo.data.id;
@@ -219,7 +214,27 @@ async function ejecutar() {
     comprobar("Visitante: la foto todavía no está en el bucket público", !p.ok, "HTTP " + p.estado);
     comprobar("Visitante: no ve el álbum borrador", (await contarAnon(anon, "albumes", "id", albumId)) === 0);
 
-    /* 4. Publicar */
+    /* 3b. Originales: privados siempre */
+    const conOriginal = await F.subirFotoAlbum(admin, albumId, { archivo, original: archivo }, { alt: "Con original", orden: 9 });
+    fotos.push(conOriginal);
+    const enOriginales = await F.listar(admin, F.BUCKET_ORIGINALES, prefijo);
+    comprobar("Original guardado en el bucket privado de originales", enOriginales.length === 1 && Boolean(conOriginal.original_path), enOriginales.length + " original(es)");
+    p = await pedir(proyecto.url + "/storage/v1/object/public/" + F.BUCKET_ORIGINALES + "/" + conOriginal.original_path);
+    comprobar("Visitante: NO puede abrir el original por URL", !p.ok, "HTTP " + p.estado);
+    const dOrig = await anon.storage.from(F.BUCKET_ORIGINALES).download(conOriginal.original_path);
+    comprobar("Visitante: NO puede descargar el original", !!dOrig.error, dOrig.error ? "bloqueado" : "lo descargó");
+    const enlace = await F.enlaceOriginal(admin, conOriginal);
+    p = enlace ? await pedir(enlace) : { ok: false, estado: "sin enlace" };
+    comprobar("Admin: descarga el original con enlace temporal", p.ok && p.bytes === archivo.size, "HTTP " + p.estado + " · " + p.bytes + " bytes");
+    const uso = await F.usoAlmacenamiento(admin);
+    comprobar("Panel: calcula el espacio usado", uso.total > 0 && Boolean(uso.porBucket[F.BUCKET_ORIGINALES]), Math.round(uso.total / 1024) + " KB en total");
+    await F.borrarFoto(admin, conOriginal);
+    fotos.pop();
+    comprobar("Borrar la foto borra también su original", (await F.listar(admin, F.BUCKET_ORIGINALES, prefijo)).length === 0);
+
+    /* 4. Publicar: cobertura visible + fotos «disponibles» → los archivos pasan al público */
+    const marca = await admin.from("albumes").update({ visible: true, estado_fotos: "disponible" }).eq("id", albumId).select("id");
+    comprobar("Marcar la cobertura visible con fotos disponibles", !marca.error, marca.error ? marca.error.message : "ok");
     let estado = await F.publicar(admin, "albumes", albumId);
     c = await contar();
     comprobar("Publicar: queda publicada con las 3 fotos en el bucket público", estado === "publicada" && c.pub === 3 && c.priv === 0,

@@ -84,10 +84,11 @@ select 'RLS activado en jornadas', 'true', relrowsecurity::text, relrowsecurity
 from pg_class where oid = 'public.jornadas'::regclass;
 
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'Visitante PUEDE leer las columnas públicas de coberturas', '7 de 7',
-       count(*) filter (where has_column_privilege('anon', 'public.albumes', c, 'SELECT')) || ' de 7',
+select 'Visitante PUEDE leer las columnas públicas de coberturas', '9 de 9',
+       count(*) filter (where has_column_privilege('anon', 'public.albumes', c, 'SELECT')) || ' de 9',
        bool_and(has_column_privilege('anon', 'public.albumes', c, 'SELECT'))
-from unnest(array['tipo','jornada_id','actividad_en','fotos_disponibles','video_publico','portada_publica','busqueda']) c;
+from unnest(array['tipo','jornada_id','actividad_en','fotos_disponibles','video_publico','portada_publica','busqueda',
+                  'fotos_estado_publico','video_estado_publico']) c;
 
 insert into resultados (prueba, esperado, obtenido, ok)
 select 'Visitante NO puede leer columnas internas o privadas', '(ninguna)',
@@ -122,12 +123,33 @@ select 'Bucket fotos-originales: PRIVADO, hasta 50 MB', 'false / 52428800',
        public::text || ' / ' || file_size_limit, not public and file_size_limit = 52428800
 from storage.buckets where id = 'fotos-originales';
 
--- Datos existentes: los álbumes anteriores siguen como estaban
+-- Datos HEREDADOS: los álbumes creados ANTES de aplicar la migración (según
+-- private.migraciones) y que nadie editó después siguen como estaban.
+-- Las coberturas creadas después, o las heredadas que un administrador ya
+-- clasificó desde el panel, no cuentan: así la prueba vale siempre, no solo
+-- justo después de migrar.
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'Datos existentes: álbumes anteriores = "pendiente", con sus fotos y visibles si estaban publicados', '0 con problemas',
-       count(*) filter (where tipo <> 'pendiente' or (estado = 'publicada' and not visible)) || ' con problemas',
-       count(*) filter (where tipo <> 'pendiente' or (estado = 'publicada' and not visible)) = 0
-from public.albumes where creado_en < now() - interval '1 second';
+select 'Registro de la migración (para distinguir lo heredado de lo nuevo)', '1', count(*)::text, count(*) = 1
+from private.migraciones where nombre = '20261111000100_coberturas';
+
+insert into resultados (prueba, esperado, obtenido, ok)
+select 'Datos heredados sin editar: "pendiente", y si estaban publicados: visibles, fotos disponibles, sin video prometido',
+       '0 con problemas',
+       count(*) filter (where a.tipo <> 'pendiente'
+                          or (a.estado = 'publicada' and (not a.visible or a.estado_fotos <> 'disponible' or a.estado_video <> 'no_aplica')))
+         || ' con problemas',
+       count(*) filter (where a.tipo <> 'pendiente'
+                          or (a.estado = 'publicada' and (not a.visible or a.estado_fotos <> 'disponible' or a.estado_video <> 'no_aplica'))) = 0
+from public.albumes a, private.migraciones m
+where m.nombre = '20261111000100_coberturas'
+  and a.creado_en < m.aplicada_en and a.actualizado_en <= m.aplicada_en;
+
+insert into resultados (prueba, esperado, obtenido, ok)
+select 'Datos heredados publicados: conservan sus fotos registradas', '0 sin fotos',
+       count(*) filter (where a.estado = 'publicada' and not exists (select 1 from public.fotos f where f.album_id = a.id)) || ' sin fotos',
+       count(*) filter (where a.estado = 'publicada' and not exists (select 1 from public.fotos f where f.album_id = a.id)) = 0
+from public.albumes a, private.migraciones m
+where m.nombre = '20261111000100_coberturas' and a.creado_en < m.aplicada_en;
 
 -- =====================================================================
 -- Datos de prueba y administrador
@@ -243,6 +265,9 @@ select pg_temp.probar('NO deja visible una cobertura clasificada sin fecha real'
   pg_temp.como('authenticated', pg_temp.admin(), $q$insert into public.albumes (slug, titulo, tipo, visible) values ('prueba-cob-x4', 'X', 'evento', true)$q$));
 select pg_temp.probar('Direcciones reservadas ("archivo") rechazadas', 'bloqueado',
   pg_temp.como('authenticated', pg_temp.admin(), $q$insert into public.albumes (slug, titulo) values ('archivo', 'X')$q$));
+select pg_temp.probar('Las coberturas nuevas NO cuentan como heredadas', '0',
+  (select count(*)::text from public.albumes a, private.migraciones m
+   where m.nombre = '20261111000100_coberturas' and a.slug like 'prueba-cob-%' and a.creado_en < m.aplicada_en));
 
 -- =====================================================================
 -- E) Estados independientes, privacidad y originales
@@ -267,12 +292,35 @@ select pg_temp.probar('Admin: NO puede pasar fotos al público si no están "dis
   pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicando' where id = '00000000-0000-0000-0000-0000000000d1'$q$));
 select pg_temp.probar('Admin: fotos disponibles → publicando', 'permitido (1 filas)',
   pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado_fotos = 'disponible', estado = 'publicando' where id = '00000000-0000-0000-0000-0000000000d1'$q$));
+select pg_temp.probar('Mientras las fotos se mueven, el estado público es "preparacion" (no "disponible")', 'preparacion',
+  (select fotos_estado_publico from public.albumes where id = '00000000-0000-0000-0000-0000000000d1'));
 select pg_temp.probar('Admin (permiso de move): foto al bucket público', 'permitido (1 filas)',
   pg_temp.como('authenticated', pg_temp.admin(), $q$update storage.objects set bucket_id = 'fotos-publicas' where bucket_id = 'fotos-borradores' and name = 'albumes/00000000-0000-0000-0000-0000000000d1/f1.jpg'$q$));
 select pg_temp.probar('Admin: fotos publicadas', 'permitido (1 filas)',
   pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado = 'publicada' where id = '00000000-0000-0000-0000-0000000000d1'$q$));
 select pg_temp.probar('Visitante: fotos sí, video en edición no, portada sí', '1 / fotos=true / video=(sin) / portada=sí / 1 foto',
   pg_temp.leer('anon', pg_temp.anon(), $q$select count(*) || ' / fotos=' || bool_or(a.fotos_disponibles) || ' / video=' || coalesce(max(a.video_publico), '(sin)') || ' / portada=' || case when max(a.portada_publica) is not null then 'sí' else 'no' end || ' / ' || (select count(*) from public.fotos f where f.album_id = '00000000-0000-0000-0000-0000000000d1') || ' foto' from public.albumes a where a.id = '00000000-0000-0000-0000-0000000000d1'$q$));
+-- Estados públicos calculados (lo único que el visitante sabe del avance)
+select pg_temp.probar('Visitante: fotos disponibles + video EN EDICIÓN (sin enlace)', 'disponible / edicion / enlace=(sin)',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select fotos_estado_publico || ' / ' || video_estado_publico || ' / enlace=' || coalesce(video_publico, '(sin)') from public.albumes where id = '00000000-0000-0000-0000-0000000000d1'$q$));
+select pg_temp.probar('Visitante: video disponible + fotos PENDIENTES', 'pendiente / disponible / enlace=dQw4w9WgXcQ',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select fotos_estado_publico || ' / ' || video_estado_publico || ' / enlace=' || coalesce(video_publico, '(sin)') from public.albumes where id = '00000000-0000-0000-0000-0000000000d2'$q$));
+select pg_temp.probar('Admin: fotos del evento "en preparación"', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado_fotos = 'preparacion' where id = '00000000-0000-0000-0000-0000000000b9'$q$));
+select pg_temp.probar('Visitante: fotos EN PREPARACIÓN + video disponible', 'preparacion / disponible',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select fotos_estado_publico || ' / ' || video_estado_publico from public.albumes where id = '00000000-0000-0000-0000-0000000000b9'$q$));
+select pg_temp.probar('Admin: "no tendrá fotos" en la cobertura de Senior', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado_fotos = 'no_aplica' where id = '00000000-0000-0000-0000-0000000000d2'$q$));
+select pg_temp.probar('Visitante: fotos NO_APLICA (la web no promete fotos)', 'no_aplica / disponible',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select fotos_estado_publico || ' / ' || video_estado_publico from public.albumes where id = '00000000-0000-0000-0000-0000000000d2'$q$));
+select pg_temp.probar('Borrador recién creado: fotos y video pendientes', 'pendiente / pendiente',
+  (select fotos_estado_publico || ' / ' || video_estado_publico from public.albumes where id = '00000000-0000-0000-0000-0000000000b2'));
+select pg_temp.probar('Admin: video "no tendrá" en una general y "en edición" (sin enlace) en otra', 'permitido (2 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado_video = case id when '00000000-0000-0000-0000-0000000000b1' then 'no_aplica' else 'edicion' end where id in ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000b2')$q$));
+select pg_temp.probar('Estado público del video: no_aplica / edicion', 'no_aplica / edicion',
+  (select string_agg(video_estado_publico, ' / ' order by id) from public.albumes where id in ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000b2')));
+select pg_temp.probar('NO acepta estados inventados', 'bloqueado',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.albumes set estado_video = 'pronto' where id = '00000000-0000-0000-0000-0000000000b2'$q$));
 select pg_temp.probar('Visitante: NO lee la ruta del original de una foto publicada', 'bloqueado',
   pg_temp.como('anon', pg_temp.anon(), $q$select original_path from public.fotos$q$));
 select pg_temp.probar('NO se puede ocultar con fotos publicadas (hay que retirarlas primero)', 'bloqueado',
@@ -321,6 +369,22 @@ select pg_temp.probar('"Área 4 Senior" NO devuelve partidos de Libre', 'sin Lib
 select pg_temp.probar('Archivo: septiembre 2024 aparece', 'sí',
   pg_temp.leer('anon', pg_temp.anon(), $q$select case when count(*) > 0 then 'sí' else 'no' end from public.archivo_coberturas() where anio = 2024 and mes = 9$q$));
 
+-- Orden. Contenido sin fecha confirmada (un álbum anterior sin clasificar)
+-- que además es lo último agregado; el evento de 2024 agregado después que
+-- los partidos de 2026.
+select pg_temp.probar('Contenido sin fecha confirmada, visible con video', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$insert into public.albumes (id, slug, titulo, tipo, visible, estado_video, youtube_id) values ('00000000-0000-0000-0000-0000000000b8', 'prueba-cob-sin-fecha', 'Sin fecha confirmada', 'pendiente', true, 'disponible', 'ccccccccccc')$q$));
+update public.albumes set actividad_en = now() + interval '1 minute'  where id = '00000000-0000-0000-0000-0000000000b9';
+update public.albumes set actividad_en = now() + interval '2 minutes' where id = '00000000-0000-0000-0000-0000000000b8';
+select pg_temp.probar('Orden por fecha real (predeterminado): 2026 primero, 2024 después, sin fecha al final',
+  'prueba-cob-alemania-argentina,prueba-cob-e-f,prueba-cob-encuentro-2024,prueba-cob-sin-fecha',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select string_agg(b.slug, ',' order by b.ordinality) from public.buscar_coberturas(p_limite => 100) with ordinality b where b.slug like 'prueba-cob-%'$q$));
+select pg_temp.probar('Orden "agregadas recientemente": encuentra lo antiguo agregado hace poco',
+  'prueba-cob-sin-fecha,prueba-cob-encuentro-2024,prueba-cob-alemania-argentina,prueba-cob-e-f',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select string_agg(b.slug, ',' order by b.ordinality) from public.buscar_coberturas(p_orden => 'reciente', p_limite => 100) with ordinality b where b.slug like 'prueba-cob-%'$q$));
+select pg_temp.probar('Agregadas recientemente + año 2024: el evento antiguo', 'prueba-cob-encuentro-2024',
+  pg_temp.leer('anon', pg_temp.anon(), $q$select string_agg(b.slug, ',' order by b.ordinality) from public.buscar_coberturas(p_desde => '2024-01-01', p_hasta => '2024-12-31', p_orden => 'reciente') with ordinality b where b.slug like 'prueba-cob-%'$q$));
+
 -- =====================================================================
 -- G) Dirección permanente y propagación de cambios
 -- =====================================================================
@@ -345,6 +409,14 @@ select pg_temp.probar('Visitante: NO puede cambiar partidos', 'bloqueado',
   pg_temp.como('anon', pg_temp.anon(), $q$update public.partidos set orden = 9$q$));
 
 -- =====================================================================
-select n, ok, prueba, esperado, obtenido from resultados order by ok, n;
+-- Primera fila: RESUMEN con el total real; después, las que fallaron.
+select n, ok, prueba, esperado, obtenido from (
+  select 0 as n, coalesce(bool_and(ok), false) as ok,
+         'RESUMEN: ' || count(*) filter (where ok) || ' de ' || count(*) || ' pruebas ok' as prueba,
+         count(*)::text as esperado, (count(*) filter (where ok))::text as obtenido
+  from resultados
+  union all
+  select n, ok, prueba, esperado, obtenido from resultados) x
+order by (n = 0) desc, ok, n;
 
 rollback;  -- deshace TODO

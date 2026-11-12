@@ -174,9 +174,13 @@
             <p class="eyebrow">Fotos y videos de cada partido</p>
             <h2 class="section__title" id="gallery-title">Últimas coberturas</h2>
           </div>
-          <a href="/coberturas" class="link-arrow">Ver todas las coberturas</a>
+          <div class="section__enlaces">
+            <a href="/coberturas" class="link-arrow">Ver todas las coberturas</a>
+            <a href="/coberturas?orden=reciente" class="link-arrow">Agregadas recientemente</a>
+          </div>
         </div>
-        <!-- Se reemplaza por las últimas coberturas publicadas (js/inicio-coberturas.js).
+        <!-- Se reemplaza por las últimas coberturas (las más recientes según la fecha
+             real del partido o evento; ver js/inicio-coberturas.js).
              Si no hay conexión con la base de datos, quedan las fotos de js/data.js. -->
         <div class="gallery__grid" id="galleryGrid"></div>
         <div class="inicio-coberturas__acciones">

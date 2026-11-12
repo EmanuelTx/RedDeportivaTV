@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Preparar álbum anterior (pruebas)</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 16px; }
+    label { display: block; margin: .5rem 0; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; }
+    button { padding: 8px 14px; margin-top: .5rem; background: #d71920; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+    pre { background: #8881; padding: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Preparar el álbum anterior en el proyecto de PRUEBAS</h1>
+  <p>Sube como <strong>archivos reales</strong>, con la Storage API, las 6 fotos (y miniaturas) del álbum
+    «Fecha 2 Area 4» en las mismas rutas que sus registros, y ajusta peso y medidas reales.
+    Usa la configuración de <code>/api/config</code> del servidor local de pruebas. Solo funciona en localhost.</p>
+  <p id="proyecto">Leyendo configuración…</p>
+  <label>Correo del administrador de prueba <input id="correo" type="email" autocomplete="username"></label>
+  <label>Contraseña <input id="contrasena" type="password" autocomplete="current-password"></label>
+  <button id="subir" type="button">Iniciar sesión y subir archivos</button>
+  <pre id="salida"></pre>
+  <script type="module" src="legado.js"></script>
+</body>
+</html>
