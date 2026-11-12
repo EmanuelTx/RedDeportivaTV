@@ -8,7 +8,7 @@ Este documento **no contiene contraseñas, claves secretas ni datos personales**
 
 ## ⚠️ Antes de empezar: 5 advertencias
 
-1. **No hagas `git push` de la rama `cloudflare-prueba` todavía.** Cloudflare Pages publica esa rama sola en https://reddeportivatv.pages.dev. Los commits locales (`30ce1a0`, `bc24c24` y el siguiente) necesitan la **migración 2**, que todavía no está aplicada en la base real. Si se publica antes, las páginas nuevas fallan.
+1. **La migración 2 YA está aplicada en producción (12/11/2026, 20:55 UTC).** Lo que falta es el `git push` de `cloudflare-prueba`, que publica sola la web y el panel nuevos en https://reddeportivatv.pages.dev. **Hasta ese push, el panel y la página del álbum de pages.dev (versión anterior) no son compatibles con la base: no usarlos.** El push se hace solo con autorización.
 2. **No ejecutes SQL en el proyecto de producción** `reddeportivatv` (identificador `mopsakafycvolxxgatga`). Cualquier prueba se hace en el proyecto de pruebas `reddeportivatv-pruebas`.
    - Antes de ejecutar cualquier SQL, confirmá el **nombre** y el **identificador** del proyecto, arriba a la izquierda en Supabase.
 3. **No toques `main`.** Es la web oficial en GitHub Pages: https://emanueltx.github.io/RedDeportivaTV/
@@ -25,7 +25,7 @@ Este documento **no contiene contraseñas, claves secretas ni datos personales**
 |---|---|
 | **Web estática original** (inicio, videos, galería, campeonatos, servicios, redes, WhatsApp) | Publicada en GitHub Pages desde `main` |
 | **Versión de prueba en Cloudflare Pages** (misma web y además páginas dinámicas) | https://reddeportivatv.pages.dev, rama `cloudflare-prueba` |
-| **Base de datos Supabase** (Free): campeonatos, categorías, partidos, noticias, álbumes, fotos, transmisiones y 2 administradores | Migración 1 aplicada en producción |
+| **Base de datos Supabase** (Free): campeonatos, categorías, partidos, noticias, álbumes, fotos, transmisiones y 2 administradores | Migraciones 1 y 2 aplicadas en producción |
 | **Panel `/admin`**: inicio de sesión, noticias, álbumes con fotos (reducción, portada, orden), campeonatos, categorías, partidos, EN VIVO, compartir, vista previa | Publicado en la versión de prueba (versión 1) |
 | **Fotos seguras**: bucket privado `fotos-borradores` y bucket público `fotos-publicas`, que se mueven con la Storage API; recuperación de publicaciones cortadas | Probado con fotos reales |
 | **Coberturas v2**: categorías por campeonato, jornadas, tipos de cobertura, fotos y video independientes, buscador, archivo, originales | Commits locales sin push. **Probado en el proyecto de pruebas el 12/11/2026** (ver sección 5). Falta aplicarlo en producción. |
@@ -60,7 +60,7 @@ Están en `supabase/migrations/`.
 | Migración | Producción (`reddeportivatv`) | Proyecto de pruebas |
 |---|---|---|
 | `20261110000100_esquema_inicial.sql` (migración 1) | ✅ Aplicada. Verificación 1 con **86/86 ok**. | ✅ Aplicada |
-| `20261111000100_coberturas.sql` (migración 2, **versión local con las correcciones del 12/11**) | ❌ **No aplicar todavía** (esperando aprobación del informe) | ✅ Versión final aplicada en entorno limpio. Verificación 1: 87/87; verificación 2: 97/97 (también con coberturas nuevas cargadas) |
+| `20261111000100_coberturas.sql` (migración 2, **versión local con las correcciones del 12/11**) | ✅ **Aplicada el 12/11/2026 20:55 UTC** (huella `b06aed3332e8b4f1`). Datos y 12 archivos idénticos al respaldo; verificación 1: 87/87; verificación 2: 97/97 | ✅ Versión final aplicada en entorno limpio. Verificación 1: 87/87; verificación 2: 97/97 (también con coberturas nuevas cargadas) |
 
 **Otros archivos:**
 - **Verificaciones**, que terminan con `rollback` y no dejan cambios: `supabase/verificaciones/01_comprobar_seguridad.sql` y `02_comprobar_coberturas.sql`.
@@ -129,9 +129,9 @@ Pasos que se siguieron:
 
 ## 6. Próximos pasos, en orden
 
-1. Hacer las pruebas de la sección 5 en el proyecto de pruebas y armar un **informe de resultados**.
-2. Con el informe aprobado: hacer un **nuevo respaldo** de producción y aplicar la migración 2 en producción. Se ejecuta la migración primero y después las dos verificaciones.
-3. Recién después: **push** de `cloudflare-prueba`, para que Cloudflare publique la web y el panel nuevos.
+1. ✅ Pruebas en el proyecto de pruebas e informe aprobado.
+2. ✅ Respaldo `respaldos/2026-11-12_antes_migracion_2_final.json` + fotos en `respaldos/2026-11-12_fotos_produccion/` (MD5 verificado); migración 2 aplicada en producción y verificada; web y panel nuevos probados localmente contra producción.
+3. **Siguiente:** push de `cloudflare-prueba` (con autorización) y comprobar pages.dev: catálogo, «Fecha 2 Area 4», `/albumes/fecha-2-area-4` → 301, panel.
 4. Clasificar desde el panel el álbum «Fecha 2 Area 4» y el partido Alemania vs. Argentina: asignarles jornada y categoría si corresponde.
 5. Más adelante, siempre con autorización:
    - dominio definitivo;
