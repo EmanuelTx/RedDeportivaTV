@@ -90,20 +90,29 @@
     if (e.target === dlg || e.target === escenario || e.target.classList.contains("visor__barra")) cerrar();
   });
 
-  /* ---- Deslizar con el dedo (o arrastrar con el mouse) ---- */
-  var inicioX = null, inicioY = 0, dx = 0, arrastrando = false;
+  /* ---- Deslizar con el dedo (o arrastrar con el mouse) ----
+     Hacia los costados: foto anterior / siguiente. Hacia abajo: cerrar. */
+  var inicioX = null, inicioY = 0, dx = 0, dy = 0, arrastrando = false;
   escenario.addEventListener("pointerdown", function (e) {
-    if (lista.length < 2 || e.target !== img) return;
-    inicioX = e.clientX; inicioY = e.clientY; dx = 0; arrastrando = false;
+    if (e.target !== img) return;
+    inicioX = e.clientX; inicioY = e.clientY; dx = 0; dy = 0; arrastrando = false;
     try { img.setPointerCapture(e.pointerId); } catch (_) { /* sin captura: igual funciona */ }
   });
   escenario.addEventListener("pointermove", function (e) {
     if (inicioX === null) return;
     dx = e.clientX - inicioX;
-    if (!arrastrando && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - inicioY)) arrastrando = true;
+    dy = e.clientY - inicioY;
+    if (!arrastrando && (Math.abs(dx) > 8 || dy > 8)) {
+      arrastrando = Math.abs(dx) > Math.abs(dy) ? (lista.length > 1 ? "lado" : false) : (dy > 0 ? "abajo" : false);
+    }
     if (!arrastrando) return;
-    var borde = (actual === 0 && dx > 0) || (actual === lista.length - 1 && dx < 0);
     img.classList.add("visor__img--arrastre");
+    if (arrastrando === "abajo") {
+      img.style.transform = "translateY(" + Math.max(dy, 0) + "px) scale(" + (1 - Math.min(dy / 2000, .1)) + ")";
+      img.style.opacity = String(1 - Math.min(dy / 400, .5));
+      return;
+    }
+    var borde = (actual === 0 && dx > 0) || (actual === lista.length - 1 && dx < 0);
     img.style.transform = "translateX(" + (borde ? dx / 3 : dx) + "px)";
     img.style.opacity = String(1 - Math.min(Math.abs(dx) / 600, .35));
   });
@@ -112,8 +121,9 @@
     var umbral = Math.min(90, window.innerWidth * 0.18);
     inicioX = null;
     if (!arrastrando) return;
-    if (dx <= -umbral && actual < lista.length - 1) mostrar(actual + 1, "der");
-    else if (dx >= umbral && actual > 0) mostrar(actual - 1, "izq");
+    if (arrastrando === "abajo" && dy >= 100) { arrastrando = false; cerrar(); return; }
+    if (arrastrando === "lado" && dx <= -umbral && actual < lista.length - 1) mostrar(actual + 1, "der");
+    else if (arrastrando === "lado" && dx >= umbral && actual > 0) mostrar(actual - 1, "izq");
     else {
       img.classList.remove("visor__img--arrastre");
       img.classList.add("visor__img--vuelve");

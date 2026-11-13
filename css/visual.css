@@ -12,14 +12,17 @@
   --sombra: 0 18px 40px rgba(0, 0, 0, .45);
 }
 
-/* Transición suave entre páginas (navegadores que la soportan) */
-@view-transition { navigation: auto; }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: .22s; }
+/* Transición suave entre páginas: solo en computadoras (en celulares
+   modestos capturar la página para animarla cuesta memoria y tiempo). */
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .2s; }
+}
 
 /* =========================================================
    1. PORTADA
    ========================================================= */
-.hero__bg img { animation: acercar 1.8s var(--ease) both; transform-origin: 60% 40%; }
+.hero__bg img { animation: acercar 1.4s var(--ease) both; transform-origin: 60% 40%; }
 @keyframes acercar { from { transform: scale(1.08); } to { transform: none; } }
 
 
@@ -29,25 +32,25 @@
 .hero .tag {
   padding-right: calc(.8em + var(--corte));
   clip-path: polygon(0 0, 100% 0, calc(100% - var(--corte)) 100%, 0 100%);
-  animation: placaEntra .5s .15s var(--ease) both;
+  animation: placaEntra .4s .05s var(--ease) both;
 }
 @keyframes placaEntra { from { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); } }
 
 .hero__title { line-height: .95; }
 @media (max-width: 720px) { .hero__title { font-size: clamp(3.2rem, 14.5vw, 5rem); } }
 .hero__linea { display: block; overflow: hidden; padding-bottom: .06em; margin-bottom: -.06em; }
-.hero__linea > span { display: block; animation: lineaSube .75s var(--ease) both; }
-.hero__linea:nth-child(1) > span { animation-delay: .3s; }
-.hero__linea:nth-child(2) > span { animation-delay: .42s; }
-.hero__linea:nth-child(3) > span { animation-delay: .54s; color: var(--red); }
+.hero__linea > span { display: block; animation: lineaSube .55s var(--ease) both; }
+.hero__linea:nth-child(1) > span { animation-delay: .12s; }
+.hero__linea:nth-child(2) > span { animation-delay: .2s; }
+.hero__linea:nth-child(3) > span { animation-delay: .28s; color: var(--red); }
 @keyframes lineaSube { from { transform: translateY(110%); } to { transform: none; } }
 
-.hero__lead { animation: aparece .6s .8s var(--ease) both; }
-.hero__actions .btn { animation: aparece .55s var(--ease) both; }
-.hero__actions .btn:nth-child(1) { animation-delay: .92s; }
-.hero__actions .btn:nth-child(2) { animation-delay: 1s; }
-.hero__actions .btn:nth-child(3) { animation-delay: 1.08s; }
-.hero .ticker { animation: aparece .6s 1.1s var(--ease) both; }
+.hero__lead { animation: aparece .4s .42s var(--ease) both; }
+.hero__actions .btn { animation: aparece .4s var(--ease) both; }
+.hero__actions .btn:nth-child(1) { animation-delay: .5s; }
+.hero__actions .btn:nth-child(2) { animation-delay: .55s; }
+.hero__actions .btn:nth-child(3) { animation-delay: .6s; }
+.hero .ticker { animation: aparece .4s .6s var(--ease) both; }
 @keyframes aparece { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 .hero__lead { text-shadow: 0 1px 12px rgba(0, 0, 0, .6); }
@@ -70,14 +73,14 @@
 @media (max-width: 860px) {
   .nav { opacity: 0; transition: transform .4s var(--ease), opacity .3s, visibility .4s; box-shadow: var(--sombra); }
   .nav.is-open { opacity: 1; }
-  .nav.is-open .nav__list li { animation: opcionEntra .4s var(--ease) both; }
-  .nav.is-open .nav__list li:nth-child(1) { animation-delay: .06s; }
-  .nav.is-open .nav__list li:nth-child(2) { animation-delay: .1s; }
-  .nav.is-open .nav__list li:nth-child(3) { animation-delay: .14s; }
-  .nav.is-open .nav__list li:nth-child(4) { animation-delay: .18s; }
-  .nav.is-open .nav__list li:nth-child(5) { animation-delay: .22s; }
-  .nav.is-open .nav__list li:nth-child(6) { animation-delay: .26s; }
-  .nav.is-open .nav__list li:nth-child(7) { animation-delay: .3s; }
+  .nav.is-open .nav__list li { animation: opcionEntra .3s var(--ease) both; }
+  .nav.is-open .nav__list li:nth-child(1) { animation-delay: .03s; }
+  .nav.is-open .nav__list li:nth-child(2) { animation-delay: .06s; }
+  .nav.is-open .nav__list li:nth-child(3) { animation-delay: .09s; }
+  .nav.is-open .nav__list li:nth-child(4) { animation-delay: .12s; }
+  .nav.is-open .nav__list li:nth-child(5) { animation-delay: .15s; }
+  .nav.is-open .nav__list li:nth-child(6) { animation-delay: .18s; }
+  .nav.is-open .nav__list li:nth-child(7) { animation-delay: .21s; }
   .nav__list a:not(.nav__cta) { display: flex; align-items: center; justify-content: space-between; }
   .nav__list a:not(.nav__cta)::after {
     content: ""; width: 10px; height: 18px; background: var(--red); opacity: .35;
@@ -140,7 +143,7 @@
 .ind--prep { --icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2a7.8 7.8 0 1 1 0 15.6 7.8 7.8 0 0 1 0-15.6ZM11 6.5V13l5 3 .9-1.6-3.9-2.3V6.5h-2Z'/%3E%3C/svg%3E"); color: var(--gray); }
 
 /* Tarjetas que llegan con "Ver más" o a la portada */
-.tarjeta--nueva { animation: tarjetaEntra .5s var(--ease) both; animation-delay: calc(var(--n, 0) * 60ms); }
+.tarjeta--nueva { animation: tarjetaEntra .4s var(--ease) both; animation-delay: calc(min(var(--n, 0), 5) * 40ms); }
 @keyframes tarjetaEntra { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
 /* Esqueleto mientras se cargan más coberturas */
@@ -262,7 +265,7 @@ html.visor-abierto { overflow: hidden; }
 
 .visor__escenario {
   position: relative; display: grid; place-items: center; min-height: 0; overflow: hidden;
-  padding: 64px clamp(0px, 6vw, 88px) 0; touch-action: pan-y pinch-zoom; cursor: grab;
+  padding: 64px clamp(0px, 6vw, 88px) 0; touch-action: pinch-zoom; cursor: grab;
 }
 .visor .visor__img {
   max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; margin: 0;
@@ -317,7 +320,6 @@ html.visor-abierto { overflow: hidden; }
    Respeto a "reducir movimiento"
    ========================================================= */
 @media (prefers-reduced-motion: reduce) {
-  @view-transition { navigation: none; }
   .hero__linea > span, .hero .tag, .hero__lead, .hero__actions .btn, .hero .ticker, .hero__bg img,
   .tarjeta--nueva, .visor[open], .visor__img--der, .visor__img--izq, .visor__img--abre, .sin-resultados,
   .filtros[open] .filtros__panel, .nav.is-open .nav__list li { animation: none !important; }
