@@ -17,14 +17,17 @@
     punto.className = "envivo__punto";
     punto.setAttribute("aria-hidden", "true");
     var etiqueta = document.createElement("strong");
-    etiqueta.textContent = "EN VIVO";
+    etiqueta.textContent = "En vivo";
+    var bug = document.createElement("span");
+    bug.className = "envivo__bug";
+    bug.append(punto, etiqueta);
     var titulo = document.createElement("span");
     titulo.className = "envivo__titulo";
     titulo.textContent = t.titulo;
     var ver = document.createElement("span");
     ver.className = "envivo__ver";
-    ver.textContent = "Ver ahora →";
-    barra.append(punto, etiqueta, titulo, ver);
+    ver.textContent = "Ver ahora";
+    barra.append(bug, titulo, ver);
     document.body.classList.add("hay-envivo");
     document.body.prepend(barra);
   }

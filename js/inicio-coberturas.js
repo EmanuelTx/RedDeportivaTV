@@ -14,6 +14,10 @@
       if (!d || !d.cantidad) return; // sin coberturas: queda el contenido de siempre
       destino.className = "tarjetas";
       destino.innerHTML = d.html;   // HTML generado y escapado en el servidor
+      Array.prototype.forEach.call(destino.children, function (t, i) {
+        t.classList.add("tarjeta--nueva");
+        t.style.setProperty("--n", String(i));
+      });
     }).catch(function () { /* queda el contenido de siempre */ });
   }
 

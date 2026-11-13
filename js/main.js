@@ -71,7 +71,7 @@
 
     grid.addEventListener("click", function (e) {
       var btn = e.target.closest("button.video__play");
-      if (!btn) return;
+      if (!btn || btn.disabled) return;
       var v = lista[+btn.dataset.index];
       var src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(v.id) +
         "?autoplay=1&rel=0" + (v.inicio ? "&start=" + v.inicio : "");
@@ -81,8 +81,26 @@
       iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
       iframe.allowFullscreen = true;
       iframe.referrerPolicy = "strict-origin-when-cross-origin";
-      btn.parentNode.replaceChildren(iframe);
+      cargarReproductor(btn.parentNode, iframe, btn);
     });
+  }
+
+  /* La miniatura queda visible (con un indicador de carga) hasta que el
+     reproductor está listo; recién ahí aparece con un fundido. */
+  function cargarReproductor(marco, iframe, boton) {
+    if (boton) boton.disabled = true;
+    marco.classList.add("is-cargando");
+    var listo = function () {
+      if (marco.classList.contains("is-listo")) return;
+      marco.classList.remove("is-cargando");
+      marco.classList.add("is-listo");
+      setTimeout(function () {
+        Array.prototype.slice.call(marco.children).forEach(function (hijo) { if (hijo !== iframe) hijo.remove(); });
+      }, 500);
+    };
+    iframe.addEventListener("load", listo);
+    setTimeout(listo, 5000); // por si el navegador no avisa la carga
+    marco.appendChild(iframe);
   }
 
   /* ---------- Galería ---------- */
@@ -96,7 +114,7 @@
       var srcset = f.mini ? ' srcset="' + f.mini + ' 800w, ' + f.src + ' 1600w" sizes="(max-width: 720px) 100vw, 66vw"' : "";
       return (
         '<figure class="gallery__item' + (f.grande ? " gallery__item--wide" : "") + ' reveal" style="margin:0">' +
-          '<button class="gallery__btn" type="button" data-index="' + i + '" aria-label="Ampliar foto: ' + esc(f.alt) + '">' +
+          '<button class="gallery__btn" type="button" data-index="' + i + '" data-src="' + esc(f.src) + '" data-caption="' + esc(f.descripcion || "") + '" aria-label="Ampliar foto: ' + esc(f.alt) + '">' +
             '<img src="' + (f.mini || f.src) + '"' + srcset + ' alt="' + esc(f.alt) + '" loading="lazy">' +
           '</button>' +
           (f.descripcion ? '<figcaption class="gallery__caption">' + esc(f.descripcion) + '</figcaption>' : "") +
@@ -120,21 +138,7 @@
     if (celdasMovil % 2 === 1 && ultima && ultima.classList.contains("gallery__item--soon")) {
       ultima.classList.add("hide-sm");
     }
-
-    /* Visor */
-    var dlg = $("#lightbox");
-    if (!dlg || typeof dlg.showModal !== "function") return;
-    grid.addEventListener("click", function (e) {
-      var btn = e.target.closest(".gallery__btn");
-      if (!btn) return;
-      var f = fotos[+btn.dataset.index];
-      $("#lightboxImg").src = f.src;
-      $("#lightboxImg").alt = f.alt;
-      $("#lightboxCaption").textContent = f.descripcion || "";
-      dlg.showModal();
-    });
-    $("#lightboxClose").addEventListener("click", function () { dlg.close(); });
-    dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+    /* El visor (js/publicacion.js) abre las fotos de cualquier galería. */
   }
 
   /* ---------- Campeonatos ---------- */
@@ -205,10 +209,39 @@
       toggle.setAttribute("aria-expanded", String(open));
       toggle.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
       nav.classList.toggle("is-open", open);
+      // Fondo oscuro y sin desplazamiento mientras el menú está abierto (celular)
+      document.documentElement.classList.toggle("menu-abierto", open);
     }
     toggle.addEventListener("click", function () { set(toggle.getAttribute("aria-expanded") !== "true"); });
     nav.addEventListener("click", function (e) { if (e.target.closest("a")) set(false); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") set(false); });
+    // Tocar el fondo oscuro cierra el menú
+    document.addEventListener("click", function (e) {
+      if (toggle.getAttribute("aria-expanded") === "true" && !e.target.closest("#nav, #navToggle")) set(false);
+    });
+    var ancho = window.matchMedia ? window.matchMedia("(min-width: 861px)") : null;
+    if (ancho && ancho.addEventListener) ancho.addEventListener("change", function (m) { if (m.matches) set(false); });
+  }
+
+  /* ---------- Sección actual marcada en el menú (portada) ---------- */
+  function setupSeccionActual() {
+    if (!("IntersectionObserver" in window)) return;
+    var enlaces = Array.prototype.slice.call(document.querySelectorAll('.nav__list a[href^="#"]:not(.nav__cta)'));
+    var porId = {};
+    enlaces.forEach(function (a) {
+      var sec = document.getElementById(a.getAttribute("href").slice(1));
+      if (sec) porId[sec.id] = a;
+    });
+    var ids = Object.keys(porId);
+    if (!ids.length) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        enlaces.forEach(function (a) { a.removeAttribute("aria-current"); });
+        porId[en.target.id].setAttribute("aria-current", "true");
+      });
+    }, { rootMargin: "-45% 0px -50% 0px" });
+    ids.forEach(function (id) { io.observe(document.getElementById(id)); });
   }
 
   /* ---------- Cabecera al hacer scroll ---------- */
@@ -243,6 +276,7 @@
   renderRedes();
   setupWhatsapp();
   setupMenu();
+  setupSeccionActual();
   setupHeader();
   setupReveal();
   var y = $("#year");

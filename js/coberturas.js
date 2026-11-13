@@ -61,8 +61,21 @@
       var params = new URLSearchParams(location.search);
       params.set("pagina", String(pagina));
       verMas.textContent = "Cargando…";
+      verMas.setAttribute("aria-busy", "true");
+      // Tarjetas "esqueleto" mientras llegan las nuevas
+      var esqueleto = '<article class="tarjeta tarjeta--esqueleto" aria-hidden="true"><div class="tarjeta__media"></div>' +
+        '<div class="tarjeta__cuerpo"><span class="esqueleto__linea esqueleto__linea--corta"></span>' +
+        '<span class="esqueleto__linea esqueleto__linea--larga"></span><span class="esqueleto__linea"></span></div></article>';
+      tarjetas.insertAdjacentHTML("beforeend", esqueleto + esqueleto + esqueleto);
       fetch("/api/coberturas?" + params.toString()).then(function (r) { return r.json(); }).then(function (d) {
+        tarjetas.querySelectorAll(".tarjeta--esqueleto").forEach(function (s) { s.remove(); });
+        var antes = tarjetas.children.length;
         tarjetas.insertAdjacentHTML("beforeend", d.html || "");
+        Array.prototype.slice.call(tarjetas.children, antes).forEach(function (t, i) {
+          t.classList.add("tarjeta--nueva");
+          t.style.setProperty("--n", String(i));
+        });
+        verMas.removeAttribute("aria-busy");
         // La URL guarda la página: al volver desde una cobertura se muestra lo mismo.
         history.replaceState(null, "", "?" + params.toString());
         if (d.hayMas) {

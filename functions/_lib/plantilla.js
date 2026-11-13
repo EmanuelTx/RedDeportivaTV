@@ -99,6 +99,7 @@ function documento({ ctx, titulo, descripcion, imagen, imagenAlt, tipo, cuerpo, 
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/css/publicacion.css">
   <link rel="stylesheet" href="/css/coberturas.css">
+  <link rel="stylesheet" href="/css/visual.css">
 </head>
 <body>
   <a class="skip-link" href="#contenido">Saltar al contenido</a>
