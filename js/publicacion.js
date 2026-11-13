@@ -18,9 +18,13 @@
   dlg.className = "lightbox visor";
   dlg.innerHTML =
     '<div class="visor__escenario"><img class="visor__img" id="lightboxImg" alt="" decoding="async" draggable="false"></div>' +
-    '<button class="visor__btn visor__btn--prev" type="button" aria-label="Foto anterior">' + FLECHA + '</button>' +
-    '<button class="visor__btn visor__btn--next" type="button" aria-label="Foto siguiente">' + FLECHA.replace("M15 5l-7 7 7 7", "M9 5l7 7-7 7") + '</button>' +
-    '<div class="visor__barra"><p class="visor__contador" aria-live="polite"></p><p class="visor__texto" id="lightboxCaption"></p></div>' +
+    // Las flechas van en la barra: en celular quedan debajo de la foto;
+    // en computadora el CSS las ubica a los costados, fuera de la foto.
+    '<div class="visor__barra">' +
+      '<button class="visor__btn visor__btn--prev" type="button" aria-label="Foto anterior">' + FLECHA + '</button>' +
+      '<p class="visor__contador" aria-live="polite"></p><p class="visor__texto" id="lightboxCaption"></p>' +
+      '<button class="visor__btn visor__btn--next" type="button" aria-label="Foto siguiente">' + FLECHA.replace("M15 5l-7 7 7 7", "M9 5l7 7-7 7") + '</button>' +
+    '</div>' +
     '<button class="visor__cerrar" id="lightboxClose" type="button" aria-label="Cerrar">' + CRUZ + '</button>';
 
   var escenario = dlg.querySelector(".visor__escenario");
