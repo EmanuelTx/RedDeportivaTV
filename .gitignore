@@ -29,3 +29,11 @@ respaldos/
 # Herramientas de Cloudflare
 .wrangler/
 node_modules/
+
+# Entorno de pruebas: nada privado dentro del repositorio
+pruebas/entorno/node_modules/
+pruebas/entorno/*.log
+pruebas/entorno/sesion*.json
+*storageState*
+playwright/.auth/
+.vercel/

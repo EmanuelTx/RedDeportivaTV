@@ -1,0 +1,18 @@
+#!/bin/sh
+# Protección: impide commits que contengan secretos o archivos privados.
+# Se activa con:  git config core.hooksPath .githooks
+bloqueo=0
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  case "$f" in
+    .env|.env.*|*.pem|*.key|*sesion*.json|*storageState*|*.dump|respaldos/*|.claude/*)
+      echo "BLOQUEADO: archivo privado en el commit: $f"; bloqueo=1;;
+  esac
+done
+patrones='sb_secret_[A-Za-z0-9_-]{10,}|postgres(ql)?://[^[:space:]:@/]+:[^[:space:]@]+@|service_role[^[:space:]]{0,40}eyJ[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{30,}\.eyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{30,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+if git diff --cached -U0 --diff-filter=ACM | grep -E '^\+' | grep -Ev '^\+\+\+' | grep -E -q "$patrones"; then
+  echo "BLOQUEADO: el commit parece contener una clave, token o contraseña."
+  git diff --cached -U0 --diff-filter=ACM | grep -E '^\+' | grep -E -o "$patrones" | cut -c1-12 | sed 's/$/…/'
+  bloqueo=1
+fi
+[ $bloqueo -eq 0 ] || { echo "Revisá los archivos o quitá el secreto antes de volver a intentar."; exit 1; }
+exit 0

@@ -17,6 +17,37 @@ Este documento **no contiene contraseñas, claves secretas ni datos personales**
 
 ---
 
+## 0. Entorno de desarrollo autónomo (leer primero)
+
+Todo vive en `pruebas/entorno/` (Cloudflare responde 404 en `/pruebas/*`; `node_modules` y registros están ignorados por git). **No contiene secretos.**
+
+**Qué hay (instalado en el PC del usuario, sin permisos de administrador):**
+- Node.js LTS portable en `%LOCALAPPDATA%\RedDeportivaTV-dev\node` (no está en el PATH: anteponerlo en cada comando, p. ej. `export PATH="$LOCALAPPDATA/RedDeportivaTV-dev/node:$PATH"` en Bash). Si falta, descargar el zip oficial de nodejs.org, verificar SHA-256 y descomprimir ahí.
+- Dependencias: `cd pruebas/entorno && npm install` (`pg`, `playwright-core`). El navegador es el **Microsoft Edge** ya instalado (`channel: "msedge"`), no se descarga nada.
+- Secretos en el **Administrador de credenciales de Windows** (cifrados por Windows, solo ese usuario/equipo): `RDTV-pruebas-db` (contraseña de la base de PRUEBAS) y `RDTV-pruebas-admin` (usuario `robot-pruebas@reddeportivatv.test` y su clave aleatoria). Se leen con `proyecto.mjs → leerSecreto()`; jamás se escriben en archivos.
+- La sesión del navegador (`storageState`) se guarda en `%LOCALAPPDATA%\RedDeportivaTV-dev\privado\`, fuera del repositorio.
+
+**Comandos (todos desde `pruebas/entorno/`):**
+| Qué | Comando |
+|---|---|
+| Arrancar el sitio local (archivos + Functions reales contra PRUEBAS, puerto 8140) | `node servidor-local.mjs` (en segundo plano) |
+| Comprobar todo el entorno (base, servidor, login del panel, bloqueo de producción) | `node comprobar-entorno.mjs` |
+| SQL en la base de pruebas | `node ejecutar-sql.mjs --sql "select 1"` o `--archivo ruta.sql` |
+| Recrear/restablecer el administrador robot | `node crear-admin-pruebas.mjs` |
+| Navegador automatizado | importar `abrir()` e `iniciarSesionAdmin()` de `navegador.mjs` (`movil: true` para celular) |
+| Guardar de nuevo la contraseña de la base de pruebas (único paso manual, si se pierde) | `powershell -NoProfile -ExecutionPolicy Bypass -File .\configurar-credenciales.ps1`, luego pegar la contraseña **solo cuando pida «Contraseña:»** (reset en Supabase → proyecto de pruebas → Project Settings → Database) |
+
+**Protecciones (no desactivar):**
+1. `ejecutar-sql.mjs` solo conecta como `postgres.czblgqmcahjnbxbcgwke` al pooler de pruebas, rechaza cualquier SQL que mencione la referencia de producción y, **tras conectar, verifica la identidad real de la base** con la tabla `private.entorno_pruebas` (si la marca no coincide, aborta).
+2. `navegador.mjs` cancela toda petición a producción o a cualquier otro `*.supabase.co` que no sea el de pruebas.
+3. `.githooks/pre-commit` (activado con `git config core.hooksPath .githooks`, hay que repetirlo en un clon nuevo) bloquea commits con claves, tokens, URLs con contraseña o archivos privados.
+4. `.claude/settings.local.json` (ignorado por git) pide confirmación para cualquier comando que mencione la referencia de producción o haga `git push`.
+5. Reglas de siempre: nada de push ni cambios en producción sin autorización; `main` no se toca.
+
+**Supabase CLI:** se evaluó y **no se instala**: exige un token de cuenta que alcanza también producción. La conexión directa por contraseña de base, exclusiva del proyecto de pruebas, es más segura y suficiente.
+
+---
+
 ## 1. Qué construimos
 
 **RedDeportivaTV** es la web de un emprendimiento familiar de cobertura deportiva: fotografía, resúmenes en video y transmisiones de futsal y fútbol.
@@ -164,6 +195,8 @@ Pasos que se siguieron:
 ---
 
 ## Anexo: servidor local para pruebas
+
+> **Reemplazado** por `pruebas/entorno/servidor-local.mjs` (ver sección 0). Lo siguiente queda solo como referencia histórica.
 
 Sirve los archivos del proyecto en `http://localhost:8140`. Para que el panel local use el **proyecto de pruebas**, guardá **fuera** de la carpeta del proyecto un archivo `config-pruebas.json` con este formato. Ambos valores son públicos y se copian del panel del proyecto **de pruebas**, en Project Settings → API Keys:
 

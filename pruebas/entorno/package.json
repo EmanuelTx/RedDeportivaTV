@@ -1,0 +1,10 @@
+{
+  "name": "reddeportivatv-entorno-pruebas",
+  "private": true,
+  "description": "Herramientas LOCALES de prueba. No se publican (functions/pruebas responde 404).",
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.13.1",
+    "playwright-core": "^1.49.0"
+  }
+}
