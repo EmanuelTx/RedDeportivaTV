@@ -35,6 +35,8 @@ Todo vive en `pruebas/entorno/` (Cloudflare responde 404 en `/pruebas/*`; `node_
 | SQL en la base de pruebas | `node ejecutar-sql.mjs --sql "select 1"` o `--archivo ruta.sql` |
 | Recrear/restablecer el administrador robot | `node crear-admin-pruebas.mjs` |
 | Navegador automatizado | importar `abrir()` e `iniciarSesionAdmin()` de `navegador.mjs` (`movil: true` para celular) |
+| Cargar la **simulación** (día de 10 partidos, 24 fotos reales, video resumen, 4 noticias, EN VIVO) | `node simular-dia.mjs` (repetible; datos `sim-…` solo en pruebas) |
+| Revisar páginas públicas / panel «Coberturas del día» (PC y celular, capturas en `%LOCALAPPDATA%\RedDeportivaTV-dev\capturas`) | `node revisar-publico.mjs [movil]` · `node revisar-panel.mjs` · `node captura.mjs <ruta> <nombre> [movil] [selector]` (en Git Bash usar `export MSYS_NO_PATHCONV=1`) |
 | Guardar de nuevo la contraseña de la base de pruebas (único paso manual, si se pierde) | `powershell -NoProfile -ExecutionPolicy Bypass -File .\configurar-credenciales.ps1`, luego pegar la contraseña **solo cuando pida «Contraseña:»** (reset en Supabase → proyecto de pruebas → Project Settings → Database) |
 
 **Protecciones (no desactivar):**
@@ -92,6 +94,9 @@ Están en `supabase/migrations/`.
 |---|---|---|
 | `20261110000100_esquema_inicial.sql` (migración 1) | ✅ Aplicada. Verificación 1 con **86/86 ok**. | ✅ Aplicada |
 | `20261111000100_coberturas.sql` (migración 2, **versión local con las correcciones del 12/11**) | ✅ **Aplicada el 12/11/2026 20:55 UTC** (huella `b06aed3332e8b4f1`). Datos y 12 archivos idénticos al respaldo; verificación 1: 87/87; verificación 2: 97/97 | ✅ Versión final aplicada en entorno limpio. Verificación 1: 87/87; verificación 2: 97/97 (también con coberturas nuevas cargadas) |
+| `20261117000100_dias_cobertura.sql` (migración 3: coberturas por día, video resumen del día) | ⏳ **NO aplicada** (necesita respaldo nuevo y autorización). Reversión: `supabase/revertir/20261117000100_revertir_dias_cobertura.sql` | ✅ Aplicada el 17/11/2026. Verificaciones 01: 90/90, 02: 98/98, 03: 78/78 (esta última con migraciones 1+2+3) |
+
+**Migración 3 (resumen):** tabla `dias_cobertura` (un registro por campeonato + fecha real, creado y borrado solo por triggers), video resumen del día (`estado_video`, `youtube_id`, privados para visitantes hasta estar «Disponible»), funciones `buscar_entradas`, `videos_publicos`, `archivo_coberturas` actualizada. No modifica ni borra datos existentes.
 
 **Otros archivos:**
 - **Verificaciones**, que terminan con `rollback` y no dejan cambios: `supabase/verificaciones/01_comprobar_seguridad.sql` y `02_comprobar_coberturas.sql`.
@@ -162,6 +167,7 @@ Pasos que se siguieron:
 
 1. ✅ Pruebas en el proyecto de pruebas e informe aprobado.
 2. ✅ Respaldo `respaldos/2026-11-12_antes_migracion_2_final.json` + fotos en `respaldos/2026-11-12_fotos_produccion/` (MD5 verificado); migración 2 aplicada en producción y verificada; web y panel nuevos probados localmente contra producción.
+2b. ✅ **Mejoras de noviembre (17/11/2026), hechas y probadas SOLO en pruebas, sin publicar:** noticias visibles (`/noticias`, «Últimas noticias» en portada, menú), coberturas agrupadas por día (`/dias/<campeonato>-<AAAA-MM-DD>`), video resumen del día, panel «Coberturas del día», nuevo diseño de EN VIVO. Falta tu revisión; después: respaldo nuevo de producción → migración 3 en producción (con autorización) → push de `cloudflare-prueba`.
 3. **Siguiente:** push de `cloudflare-prueba` (con autorización) y comprobar pages.dev: catálogo, «Fecha 2 Area 4», `/albumes/fecha-2-area-4` → 301, panel.
 4. Clasificar desde el panel el álbum «Fecha 2 Area 4» y el partido Alemania vs. Argentina: asignarles jornada y categoría si corresponde.
 5. Más adelante, siempre con autorización:

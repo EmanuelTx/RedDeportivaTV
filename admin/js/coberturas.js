@@ -224,7 +224,7 @@ async function actualizarSinPisar(original, cambios) {
 
 async function editor(main, id) {
   let reg = id ? await cargar(id) : {
-    tipo: "partido", estado: "borrador", visible: false, estado_fotos: "pendiente", estado_video: "pendiente"
+    tipo: "partido", estado: "borrador", visible: false, estado_fotos: "pendiente", estado_video: "no_aplica"
   };
   let original = Object.assign({}, reg);
   let fotos = id ? await cargarFotos(id) : [];
@@ -247,6 +247,8 @@ async function editor(main, id) {
   const visible = h("input", { type: "checkbox", checked: Boolean(reg.visible) });
   const estFotos = opciones(h("select"), Object.entries(EST_FOTOS).map(([v, t]) => ({ valor: v, texto: t })), { vacio: null, valor: reg.estado_fotos });
   const estVideo = opciones(h("select"), Object.entries(EST_VIDEO).map(([v, t]) => ({ valor: v, texto: t })), { vacio: null, valor: reg.estado_video });
+  estVideo.addEventListener("change", () => { videoElegido = true; });
+  let videoElegido = false; // si lo eligieron a mano, no se cambia solo
   const videoUrl = h("input", { type: "url", maxlength: 300, placeholder: "https://www.youtube.com/watch?v=… o https://youtu.be/…" });
   const videoVista = h("div", { class: "video-vista" });
   const videoNota = h("p", { class: "nota" });
@@ -335,6 +337,7 @@ async function editor(main, id) {
   }
   function aplicarTipo() {
     const t = tipo.value;
+    if (!reg.id && !videoElegido) estVideo.value = t === "partido" ? "no_aplica" : "pendiente";
     filaPartido.hidden = t !== "partido";
     filaJor.hidden = !(t === "partido" || t === "jornada");
     filaJor.querySelector(".campo__etiqueta").textContent = t === "jornada" ? "Jornada *" : "Jornada (para filtrar los partidos)";
@@ -538,13 +541,21 @@ async function editor(main, id) {
     campo("Descripción", descripcion),
     filaFecha);
 
+  // Enlace a la cobertura del día (el video resumen general se carga allí)
+  const avisoDia = h("p", { class: "nota" });
+  if (reg.id && ["partido", "jornada"].includes(reg.tipo) && reg.campeonato_id && reg.fecha) {
+    const d = await app.sb.from("dias_cobertura").select("id").eq("campeonato_id", reg.campeonato_id).eq("fecha", reg.fecha).maybeSingle();
+    if (d.data) avisoDia.append("Este partido forma parte de la cobertura del día. ", h("a", { href: "#/dias/" + d.data.id }, "Abrir la cobertura del día"), " (video resumen general y avance de las fotos).");
+  }
+
   const bloqueEstado = h("section", { class: "bloque" },
     h("h2", { text: "Publicación" }),
     h("label", { class: "campo campo--check" }, visible, h("span", { text: "Visible en la web" })),
     h("p", { class: "nota" }, "Se muestra cuando las fotos o el video están «Disponibles». Cada uno puede completarse por separado."),
     h("div", { class: "form__fila" },
       campo("📷 Fotos", estFotos, "Pendientes → En preparación → Disponibles. «No tendrá fotos»: la web no las anuncia."),
-      campo("▶ Video", estVideo, "Pendiente → En edición → Disponible. «No tendrá video»: la web no lo anuncia.")),
+      campo("▶ Video propio de este partido", estVideo, "Solo si se hizo un video aparte de este partido. El resumen general del día se carga en «Coberturas del día».")),
+    avisoDia,
     campo("Enlace del video resumen (YouTube)", videoUrl), videoVista, videoNota);
 
   const fechas = reg.id ? h("p", { class: "nota fechas-registro" },

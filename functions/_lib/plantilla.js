@@ -185,12 +185,27 @@ const AVISO_VIDEO = {
   pendiente: { corto: "Video próximamente", titulo: "Video resumen próximamente", texto: "Todavía no hay video resumen de esta cobertura." }
 };
 
-function indicadores(t) {
+/* Video general del día (un solo resumen para todos los partidos) */
+const AVISO_VIDEO_DIA = {
+  edicion: { corto: "Video resumen en edición", titulo: "Estamos preparando el video resumen del día", texto: "Incluye todos los partidos y va a aparecer acá apenas esté listo." },
+  pendiente: { corto: "Video resumen próximamente", titulo: "Video resumen del día próximamente", texto: "Va a incluir todos los partidos de este día." }
+};
+
+/* Indicadores de disponibilidad de una tarjeta.
+   - Día: "Fotos" (o "Fotos de 8 de 10 partidos" mientras se van publicando)
+     y "Video resumen" del día.
+   - Partido dentro de un día: no promete video propio (el resumen es del día). */
+function indicadores(t, { partidoDelDia = false } = {}) {
   const partes = [];
-  if (t.fotos) partes.push('<span class="ind ind--fotos">Fotos</span>');
-  if (t.video) partes.push('<span class="ind ind--video">Video</span>');
+  if (t.fotos) {
+    let texto = "Fotos";
+    if (t.esDia && t.partidos > 1 && t.partidosConFotos < t.partidos) texto = "Fotos de " + t.partidosConFotos + " de " + t.partidos + " partidos";
+    else if (partidoDelDia && t.cantidadFotos) texto = "Fotos · " + t.cantidadFotos;
+    partes.push('<span class="ind ind--fotos">' + texto + "</span>");
+  }
+  if (t.video) partes.push('<span class="ind ind--video">' + (t.esDia ? "Video resumen" : "Video") + "</span>");
   const af = !t.fotos && AVISO_FOTOS[t.estadoFotos];
-  const av = !t.video && AVISO_VIDEO[t.estadoVideo];
+  const av = !t.video && !partidoDelDia && (t.esDia ? AVISO_VIDEO_DIA : AVISO_VIDEO)[t.estadoVideo];
   if (af) partes.push('<span class="ind ind--prep">' + af.corto + "</span>");
   if (av) partes.push('<span class="ind ind--prep">' + av.corto + "</span>");
   return partes.length ? `<div class="ind-lista">${partes.join("")}</div>` : "";
@@ -200,7 +215,30 @@ function avisoContenido(a, id) {
   return a ? `<section class="cob-aviso"${id ? ` id="${id}"` : ""}><p class="cob-aviso__titulo">${esc(a.titulo)}</p><p>${esc(a.texto)}</p></section>` : "";
 }
 
+/* Cobertura del día: UNA tarjeta por campeonato y fecha real. */
+function tarjetaDia(t, { cargaInmediata = false } = {}) {
+  const cuenta = t.partidos > 0 ? t.partidos + (t.partidos === 1 ? " partido" : " partidos") : "Cobertura general";
+  return `
+      <article class="tarjeta tarjeta--dia">
+        <a class="tarjeta__enlace" href="${esc(t.ruta)}">
+          <div class="tarjeta__media${t.video && !t.fotos ? " tarjeta__media--video" : ""}">
+            ${t.imagen
+              ? `<img src="${esc(t.imagen)}" data-alternativa="${esc(t.imagenAlternativa || "")}" alt="" loading="${cargaInmediata ? "eager" : "lazy"}" decoding="async">`
+              : `<span class="tarjeta__sin-imagen" aria-hidden="true">TV</span>`}
+            <span class="tarjeta__cuenta">${esc(cuenta)}</span>
+          </div>
+          <div class="tarjeta__cuerpo">
+            <p class="tarjeta__fecha"><time datetime="${esc(t.fecha)}">${esc(fechaCorta(t.fecha))}</time> · Cobertura del día</p>
+            <h3 class="tarjeta__titulo">${esc(t.titulo)}</h3>
+            ${t.categorias.length ? `<p class="tarjeta__meta">${t.categorias.map(esc).join(" · ")}</p>` : ""}
+            ${indicadores(t)}
+          </div>
+        </a>
+      </article>`;
+}
+
 export function tarjeta(t, { cargaInmediata = false } = {}) {
+  if (t.esDia) return tarjetaDia(t, { cargaInmediata });
   const meta = [t.campeonato, t.categoria, t.jornada].filter(Boolean).map(esc).join(" · ");
   return `
       <article class="tarjeta">
@@ -223,7 +261,7 @@ export function tarjeta(t, { cargaInmediata = false } = {}) {
 export function tarjetaVideo(t) {
   return `
       <article class="tarjeta tarjeta--video">
-        <a class="tarjeta__enlace" href="/coberturas/${esc(t.slug)}#video">
+        <a class="tarjeta__enlace" href="${esc(t.ruta || "/coberturas/" + t.slug)}#video">
           <div class="tarjeta__media tarjeta__media--video">
             <img src="https://i.ytimg.com/vi/${esc(t.video)}/mqdefault.jpg" alt="" loading="lazy" decoding="async">
           </div>
@@ -255,11 +293,26 @@ function botonesCompartir(titulo) {
       </div>`;
 }
 
+/* Reproductor de YouTube (se carga recién al tocar play; ver js/cobertura.js).
+   Siempre ofrece "Ver en YouTube" por si el video no permite reproducirse acá. */
+function bloqueVideo(id, titulo, etiqueta, extra = "") {
+  return `<section class="cob-video" id="video" aria-label="${esc(etiqueta)}">
+        <div class="cob-video__marco" data-youtube="${esc(id)}" data-titulo="${esc(titulo)}">
+          <img src="https://i.ytimg.com/vi/${esc(id)}/hqdefault.jpg" alt="" class="cob-video__miniatura" loading="eager">
+          <button class="cob-video__play" type="button" aria-label="Reproducir: ${esc(etiqueta)}">
+            <svg viewBox="0 0 68 48" width="68" height="48" aria-hidden="true"><path fill="#e30613" d="M66.5 7.7a8.5 8.5 0 0 0-6-6C55.2.4 34 .4 34 .4s-21.2 0-26.5 1.3a8.5 8.5 0 0 0-6 6A89 89 0 0 0 .2 24a89 89 0 0 0 1.3 16.3 8.5 8.5 0 0 0 6 6C12.8 47.6 34 47.6 34 47.6s21.2 0 26.5-1.3a8.5 8.5 0 0 0 6-6A89 89 0 0 0 67.8 24a89 89 0 0 0-1.3-16.3Z"/><path fill="#fff" d="m27 34 18-10-18-10z"/></svg>
+          </button>
+        </div>
+        <p class="cob-video__alternativa">¿No se reproduce? <a href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">Ver en YouTube ↗</a>${extra}</p>
+      </section>`;
+}
+
 /* ---------- Página de una cobertura ---------- */
 
 export function paginaCobertura(ctx, c) {
   const pasos = [{ texto: "Inicio", url: "/" }, { texto: "Coberturas", url: "/coberturas" }];
   if (c.campeonato) pasos.push({ texto: c.campeonato.nombre, url: rutaCampeonato(c.campeonato) });
+  if (c.dia) pasos.push({ texto: fechaCorta(c.fecha), url: c.dia.ruta });
   if (c.campeonato && c.categoria) pasos.push({ texto: c.categoria.nombre, url: rutaCategoria(c.campeonato, c.categoria) });
   if (c.jornada) pasos.push({ texto: c.jornada.nombre, url: rutaJornada(c.jornada) });
   pasos.push({ texto: c.titulo });
@@ -268,17 +321,14 @@ export function paginaCobertura(ctx, c) {
   const meta = [fechaLegible(c.fecha), c.campeonato && c.campeonato.nombre, c.categoria && c.categoria.nombre,
     c.jornada && c.jornada.nombre, p && p.fase, p && p.lugar].filter(Boolean).map(esc).join(" · ");
 
-  const video = c.video
-    ? `<section class="cob-video" id="video" aria-label="Video resumen">
-        <div class="cob-video__marco" data-youtube="${esc(c.video)}" data-titulo="${esc(c.titulo)}">
-          <img src="https://i.ytimg.com/vi/${esc(c.video)}/hqdefault.jpg" alt="" class="cob-video__miniatura" loading="eager">
-          <button class="cob-video__play" type="button" aria-label="Reproducir el video resumen">
-            <svg viewBox="0 0 68 48" width="68" height="48" aria-hidden="true"><path fill="#e30613" d="M66.5 7.7a8.5 8.5 0 0 0-6-6C55.2.4 34 .4 34 .4s-21.2 0-26.5 1.3a8.5 8.5 0 0 0-6 6A89 89 0 0 0 .2 24a89 89 0 0 0 1.3 16.3 8.5 8.5 0 0 0 6 6C12.8 47.6 34 47.6 34 47.6s21.2 0 26.5-1.3a8.5 8.5 0 0 0 6-6A89 89 0 0 0 67.8 24a89 89 0 0 0-1.3-16.3Z"/><path fill="#fff" d="m27 34 18-10-18-10z"/></svg>
-          </button>
-        </div>
-        <p class="cob-video__alternativa">¿No se reproduce? <a href="https://www.youtube.com/watch?v=${esc(c.video)}" target="_blank" rel="noopener">Ver en YouTube ↗</a></p>
-      </section>`
-    : avisoContenido(AVISO_VIDEO[c.estadoVideo], "video");
+  // Video: el propio del partido (si hubo uno aparte) o, si no, el resumen general
+  // del día, que incluye este partido. Solo se anuncia lo que va a existir.
+  const enlaceDia = c.dia ? ` · <a href="${esc(c.dia.ruta)}">Ver todos los partidos del día</a>` : "";
+  let video;
+  if (c.video) video = bloqueVideo(c.video, c.titulo, "Video resumen");
+  else if (c.dia && c.dia.video) video = bloqueVideo(c.dia.video, "Resumen del día · " + c.titulo, "Video resumen del día (incluye este partido)", enlaceDia);
+  else if (c.estadoVideo === "no_aplica") video = avisoContenido(c.dia ? AVISO_VIDEO_DIA[c.dia.estadoVideo] : null, "video");
+  else video = avisoContenido(AVISO_VIDEO[c.estadoVideo], "video");
 
   const galeria = c.fotosDisponibles && c.fotos.length
     ? `<section class="cob-galeria" aria-label="Fotografías">
@@ -305,7 +355,7 @@ export function paginaCobertura(ctx, c) {
       ${botonesCompartir(c.titulo)}
       ${video}
       ${galeria}
-      ${c.jornada ? `<p class="cob-volver"><a class="link-arrow" href="${esc(rutaJornada(c.jornada))}">Ver todos los partidos de ${esc(c.jornada.nombre)}</a></p>` : ""}
+      ${c.dia || c.jornada ? `<p class="cob-volver">${c.dia ? `<a class="link-arrow" href="${esc(c.dia.ruta)}">Todos los partidos del ${esc(fechaCorta(c.fecha))}</a>` : ""}${c.jornada ? `<a class="link-arrow" href="${esc(rutaJornada(c.jornada))}">Ver todos los partidos de ${esc(c.jornada.nombre)}</a>` : ""}</p>` : ""}
     </article>`;
 
   return documento({
@@ -549,7 +599,7 @@ export function paginaNoticia(ctx, n) {
   const meta = [fechaLegible(n.fecha), n.campeonato, n.categoria, n.partido].filter(Boolean).map(esc).join(" · ");
   const cuerpo = `
     <article class="container pub__articulo">
-      ${migas([{ texto: "Inicio", url: "/" }, { texto: n.titulo }])}
+      ${migas([{ texto: "Inicio", url: "/" }, { texto: "Noticias", url: "/noticias" }, { texto: n.titulo }])}
       ${avisoPrueba(n)}
       <p class="eyebrow">Noticia</p>
       <h1 class="pub__titulo">${esc(n.titulo)}</h1>
@@ -560,7 +610,12 @@ export function paginaNoticia(ctx, n) {
 ${parrafos(n.contenido)}
       </div>
       ${botonesCompartir(n.titulo)}
-    </article>`;
+    </article>
+    ${n.mas && n.mas.length ? `<section class="container pub__articulo pub__articulo--ancho noticias-mas" aria-label="Más noticias">
+      <h2 class="cob-subtitulo">Más noticias</h2>
+      <div class="noticias">${n.mas.map((m) => tarjetaNoticia(m)).join("")}</div>
+      <p class="ver-mas"><a class="link-arrow" href="/noticias">Ver todas las noticias</a></p>
+    </section>` : ""}`;
   return documento({
     ctx, titulo: n.titulo, descripcion: n.descripcion || n.contenido, imagen: n.portada,
     imagenAlt: n.portada_alt, tipo: "article", cuerpo, noindex: esPrueba(ctx, n), estado: 200, extraJs: ["/js/cobertura.js"]
@@ -590,4 +645,130 @@ export function paginaError(ctx) {
       <a class="btn btn--primary" href="/">Ir al inicio</a>
     </section>`;
   return documento({ ctx, titulo: "Página no disponible", descripcion: "", tipo: "website", cuerpo, noindex: true, estado: 503 });
+}
+
+/* =========================================================
+   Cobertura del día: /dias/<slug>
+   Todos los partidos de un campeonato en una fecha real, por categoría →
+   jornada → orden de encuentro, con el video resumen general arriba.
+   Cada partido conserva su galería, su resultado y su enlace para compartir.
+   ========================================================= */
+
+const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+function fechaConDia(fecha) {
+  const l = fechaLegible(fecha);
+  if (!l) return "";
+  return DIAS_SEMANA[new Date(String(fecha).slice(0, 10) + "T00:00:00Z").getUTCDay()] + " " + l;
+}
+
+function partidoDelDia(t, i) {
+  const p = t.partido;
+  const goles = p && p.goles_local != null && p.goles_visitante != null;
+  const equipos = p
+    ? `${esc(p.equipo_local)} <strong>${goles ? esc(p.goles_local) + " – " + esc(p.goles_visitante) : "vs"}</strong> ${esc(p.equipo_visitante)}`
+    : esc(t.titulo);
+  const datos = p ? [p.fase, p.lugar].filter(Boolean).map(esc).join(" · ") : "";
+  return `<li class="partido"><a class="partido__enlace" href="/coberturas/${esc(t.slug)}">${t.imagen
+    ? `<img src="${esc(t.imagen)}" data-alternativa="${esc(t.imagenAlternativa || "")}" alt="" loading="lazy" decoding="async" class="partido__img">` : ""}<span class="partido__texto">
+            <span class="partido__numero">Partido ${i + 1}${t.hora ? " · " + esc(t.hora) : ""}</span>
+            <span class="partido__equipos">${equipos}</span>
+            ${datos ? `<span class="partido__datos">${datos}</span>` : ""}
+            ${indicadores(t, { partidoDelDia: true })}</span></a></li>`;
+}
+
+export function paginaDia(ctx, d) {
+  const camp = d.campeonato;
+  const nombre = camp ? camp.nombre : "Cobertura del día";
+  const pasos = [{ texto: "Inicio", url: "/" }, { texto: "Coberturas", url: "/coberturas" }];
+  if (camp) pasos.push({ texto: camp.nombre, url: rutaCampeonato(camp) });
+  pasos.push({ texto: fechaCorta(d.fecha) });
+
+  const video = d.video
+    ? bloqueVideo(d.video, nombre + " · " + fechaLegible(d.fecha), "Video resumen del día")
+    : avisoContenido(AVISO_VIDEO_DIA[d.estadoVideo], "video");
+
+  const nombresCategorias = d.categorias.map((c) => c.categoria && c.categoria.nombre).filter(Boolean);
+  const meta = [fechaConDia(d.fecha), d.totalPartidos ? d.totalPartidos + (d.totalPartidos === 1 ? " partido" : " partidos") : "", nombresCategorias.join(" · ")]
+    .filter(Boolean).map(esc).join(" · ");
+
+  const bloques = d.categorias.map((c) => {
+    const total = c.jornadas.reduce((n, j) => n + j.partidos.length, 0);
+    const titulo = c.categoria ? c.categoria.nombre : (d.categorias.length > 1 ? "Sin categoría" : "Partidos");
+    return `<section class="dia__categoria" aria-label="${esc(titulo)}">
+        <h2 class="cob-subtitulo">${esc(titulo)} <span>(${total})</span></h2>
+        ${c.jornadas.map((j) => `${j.jornada ? `<h3 class="dia__jornada">${esc(j.jornada.nombre)}</h3>` : ""}
+        <ol class="partidos">${j.partidos.map(partidoDelDia).join("")}</ol>`).join("")}
+      </section>`;
+  }).join("");
+
+  const generales = d.generales.length
+    ? `<section aria-label="Cobertura general"><h2 class="cob-subtitulo">Cobertura general</h2><div class="tarjetas">${d.generales.map((t) => tarjeta(t)).join("")}</div></section>` : "";
+
+  const cuerpo = `
+    <article class="container pub__articulo pub__articulo--ancho cob dia">
+      ${migas(pasos)}
+      <p class="eyebrow">Cobertura del día</p>
+      <h1 class="pub__titulo">${esc(nombre)}</h1>
+      ${meta ? `<p class="pub__meta">${meta}</p>` : ""}
+      ${d.descripcion ? `<p class="pub__bajada">${esc(d.descripcion)}</p>` : ""}
+      ${botonesCompartir(nombre + " · " + fechaLegible(d.fecha))}
+      ${video}
+      ${generales}
+      ${bloques || `<p class="pub__vacio">Las fotos de los partidos van a estar disponibles pronto.</p>`}
+      <p class="cob-volver">${camp ? `<a class="link-arrow" href="${esc(rutaCampeonato(camp))}">Más de ${esc(camp.nombre)}</a>` : ""}<a class="link-arrow" href="/coberturas">Todas las coberturas</a></p>
+    </article>`;
+
+  return documento({
+    ctx, titulo: nombre + " · " + fechaLegible(d.fecha),
+    descripcion: d.descripcion || `Fotos${d.video ? " y video resumen" : ""} de ${nombre}, ${fechaConDia(d.fecha)}${d.totalPartidos ? ": " + d.totalPartidos + (d.totalPartidos === 1 ? " partido" : " partidos") : ""}.`,
+    imagen: d.imagen, tipo: "article", cuerpo, noindex: esPrueba(ctx), estado: 200, extraJs: ["/js/cobertura.js"]
+  });
+}
+
+/* =========================================================
+   Noticias: tarjeta, listado y "más noticias"
+   ========================================================= */
+
+export function tarjetaNoticia(n, { cargaInmediata = false } = {}) {
+  return `
+      <article class="noticia">
+        <a class="noticia__enlace" href="/noticias/${esc(n.slug)}">
+          <div class="noticia__media">
+            ${n.imagen
+              ? `<img src="${esc(n.imagen)}" alt="${esc(n.imagenAlt)}" loading="${cargaInmediata ? "eager" : "lazy"}" decoding="async">`
+              : `<span class="tarjeta__sin-imagen" aria-hidden="true">TV</span>`}
+          </div>
+          <div class="noticia__cuerpo">
+            <p class="noticia__fecha">${n.fecha ? `<time datetime="${esc(n.fecha)}">${esc(fechaLegible(n.fecha))}</time>` : ""}${n.campeonato ? ` · ${esc(n.campeonato)}` : ""}</p>
+            <h3 class="noticia__titulo">${esc(n.titulo)}</h3>
+            ${n.descripcion ? `<p class="noticia__texto">${esc(n.descripcion)}</p>` : ""}
+            <span class="noticia__mas">Leer noticia</span>
+          </div>
+        </a>
+      </article>`;
+}
+
+export function paginaNoticias(ctx, { items, total, pagina, origenUrl }) {
+  const quedan = total > items.length;
+  const siguiente = new URL(origenUrl);
+  siguiente.searchParams.set("pagina", String(pagina + 1));
+  const cuerpo = `
+    <section class="container pub__articulo pub__articulo--ancho noticias-pagina">
+      ${migas([{ texto: "Inicio", url: "/" }, { texto: "Noticias" }])}
+      <h1 class="pub__titulo">Noticias</h1>
+      <p class="pub__bajada">Lo último de los torneos que seguimos: resultados, crónicas y novedades.</p>
+      ${items.length
+        ? `<div class="noticias" id="noticias">${items.map((n, i) => tarjetaNoticia(n, { cargaInmediata: i < 2 })).join("")}</div>`
+        : `<div class="sin-resultados">
+            <p class="sin-resultados__titulo">Todavía no hay noticias publicadas.</p>
+            <ul><li>Mirá las <a href="/coberturas">coberturas</a> de los últimos partidos.</li></ul>
+          </div>`}
+      ${quedan ? `<p class="ver-mas"><a class="btn btn--ghost" id="verMas" href="${esc(siguiente.pathname + siguiente.search)}" data-pagina="${pagina}" data-api="/api/noticias" data-destino="noticias">Ver más noticias</a></p>` : ""}
+    </section>`;
+  return documento({
+    ctx, titulo: "Noticias",
+    descripcion: "Noticias de futsal y fútbol de salón: resultados, crónicas y novedades de los torneos que cubre RedDeportivaTV.",
+    tipo: "website", cuerpo, noindex: esPrueba(ctx), estado: 200,
+    canonica: new URL(ctx.request.url).origin + "/noticias"
+  });
 }

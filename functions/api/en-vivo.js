@@ -5,6 +5,22 @@
    ========================================================= */
 import { configSupabase } from "../_lib/datos.js";
 
+/* ID del video de un enlace de YouTube (watch?v=, youtu.be/, /live/, /embed/, /shorts/). */
+function idYoutube(texto) {
+  const valido = (id) => (/^[A-Za-z0-9_-]{11}$/.test(id || "") ? id : null);
+  try {
+    const u = new URL(String(texto || "").trim());
+    const host = u.hostname.replace(/^(www|m|music)\./, "");
+    if (host === "youtu.be") return valido(u.pathname.slice(1).split("/")[0]);
+    if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      if (u.searchParams.get("v")) return valido(u.searchParams.get("v"));
+      const m = u.pathname.match(/^\/(?:live|shorts|embed|v)\/([A-Za-z0-9_-]{11})/);
+      if (m) return m[1];
+    }
+  } catch (_) { /* no es una URL */ }
+  return null;
+}
+
 function json(cuerpo, segundos) {
   return new Response(JSON.stringify(cuerpo), {
     headers: {
@@ -28,7 +44,7 @@ export async function onRequestGet(ctx) {
     const vigentes = filas
       .filter((t) => /^https:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//.test(t.youtube_url))
       .filter((t) => !t.termina_en || Date.parse(t.termina_en) > ahora)
-      .map((t) => ({ titulo: t.titulo, url: t.youtube_url }));
+      .map((t) => ({ titulo: t.titulo, url: t.youtube_url, id: idYoutube(t.youtube_url) }));
     return json({ en_vivo: vigentes }, 30);
   } catch (error) {
     console.error("en-vivo:", error.message);

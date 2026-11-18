@@ -53,7 +53,11 @@
 
   /* ---- "Ver más": agrega tarjetas sin recargar y recuerda la página ---- */
   var verMas = document.getElementById("verMas");
-  var tarjetas = document.getElementById("tarjetas");
+  // Sirve para coberturas (por omisión) y para noticias (data-api / data-destino)
+  var tarjetas = document.getElementById(verMas ? (verMas.getAttribute("data-destino") || "tarjetas") : "tarjetas");
+  var apiVerMas = verMas ? (verMas.getAttribute("data-api") || "/api/coberturas") : "";
+  var esNoticias = apiVerMas.indexOf("noticias") !== -1;
+  var textoVerMas = verMas ? verMas.textContent : "Ver más";
   if (verMas && tarjetas && window.fetch) {
     verMas.addEventListener("click", function (e) {
       e.preventDefault();
@@ -63,16 +67,18 @@
       verMas.textContent = "Cargando…";
       verMas.setAttribute("aria-busy", "true");
       // Tarjetas "esqueleto" mientras llegan las nuevas
-      var esqueleto = '<article class="tarjeta tarjeta--esqueleto" aria-hidden="true"><div class="tarjeta__media"></div>' +
+      var claseEsq = esNoticias ? "noticia tarjeta--esqueleto" : "tarjeta tarjeta--esqueleto";
+      var esqueleto = '<article class="' + claseEsq + '" aria-hidden="true"><div class="tarjeta__media"></div>' +
         '<div class="tarjeta__cuerpo"><span class="esqueleto__linea esqueleto__linea--corta"></span>' +
         '<span class="esqueleto__linea esqueleto__linea--larga"></span><span class="esqueleto__linea"></span></div></article>';
       tarjetas.insertAdjacentHTML("beforeend", esqueleto + esqueleto + esqueleto);
-      fetch("/api/coberturas?" + params.toString()).then(function (r) { return r.json(); }).then(function (d) {
+      fetch(apiVerMas + "?" + params.toString()).then(function (r) { return r.json(); }).then(function (d) {
         tarjetas.querySelectorAll(".tarjeta--esqueleto").forEach(function (s) { s.remove(); });
+        if (!d || d.error) throw new Error("sin datos");
         var antes = tarjetas.children.length;
         tarjetas.insertAdjacentHTML("beforeend", d.html || "");
         Array.prototype.slice.call(tarjetas.children, antes).forEach(function (t, i) {
-          t.classList.add("tarjeta--nueva");
+          t.classList.add(esNoticias ? "noticia--nueva" : "tarjeta--nueva");
           t.style.setProperty("--n", String(i));
         });
         verMas.removeAttribute("aria-busy");
@@ -80,7 +86,7 @@
         history.replaceState(null, "", "?" + params.toString());
         if (d.hayMas) {
           verMas.setAttribute("data-pagina", String(pagina));
-          verMas.textContent = "Ver más";
+          verMas.textContent = textoVerMas;
         } else {
           verMas.parentNode.remove();
         }

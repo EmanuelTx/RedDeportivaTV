@@ -175,15 +175,45 @@ export function leerFiltros(url, cat) {
   return f;
 }
 
-/* Devuelve { items, total } con datos listos para las tarjetas. */
-export async function buscar(ctx, cat, args, { limite = POR_PAGINA, offset = 0, conVideo = null } = {}) {
+/* Devuelve { items, total } con datos listos para las tarjetas.
+   Los partidos de un mismo campeonato y día se agrupan en UNA tarjeta
+   ("cobertura del día"); lo demás (eventos, generales, anteriores sin fecha)
+   queda como tarjeta suelta. El agrupamiento lo hace la base (buscar_entradas). */
+export async function buscar(ctx, cat, args, { limite = POR_PAGINA, offset = 0 } = {}) {
   const cfg = requerirConfig(ctx);
-  const filas = await rpc(cfg, "buscar_coberturas", Object.assign({}, args, {
-    p_limite: Math.min(limite, 100), p_offset: offset, p_con_video: conVideo
+  const filas = await rpc(cfg, "buscar_entradas", Object.assign({}, args, {
+    p_limite: Math.min(limite, 100), p_offset: offset
   }));
   return {
     total: filas[0] ? Number(filas[0].total) : 0,
-    items: filas.map((f) => tarjetaDesdeFila(cfg, cat, f))
+    items: filas.map((f) => (f.es_dia ? tarjetaDia(cfg, cat, f) : tarjetaDesdeFila(cfg, cat, f)))
+  };
+}
+
+/* Tarjeta de una cobertura del día: campeonato + fecha real + categorías + partidos. */
+function tarjetaDia(cfg, cat, f) {
+  const camp = cat.campeonato[f.campeonato_id];
+  const categorias = (f.categorias || [])
+    .map((id) => cat.categoria[id]).filter(Boolean)
+    .sort((a, b) => (a.orden - b.orden) || a.nombre.localeCompare(b.nombre, "es"))
+    .map((k) => k.nombre);
+  return {
+    esDia: true,
+    ruta: "/dias/" + f.slug,
+    slug: f.slug,
+    titulo: camp ? camp.nombre : "Cobertura del día",
+    tipo: "dia",
+    fecha: f.fecha,
+    campeonato: camp ? camp.nombre : "",
+    categorias,
+    partidos: Number(f.partidos) || 0,
+    partidosConFotos: Number(f.con_fotos) || 0,
+    fotos: Boolean(f.fotos_disponibles),
+    video: f.video_publico || null,
+    estadoFotos: estadoPublico(f.fotos_estado_publico, f.fotos_disponibles),
+    estadoVideo: estadoPublico(f.video_estado_publico, f.video_publico),
+    imagen: f.portada_publica ? urlPublica(cfg, rutaMini(f.portada_publica)) : miniaturaYoutube(f.video_publico),
+    imagenAlternativa: f.portada_publica ? urlPublica(cfg, f.portada_publica) : miniaturaYoutube(f.video_publico, "mqdefault")
   };
 }
 
@@ -250,7 +280,15 @@ export async function obtenerCobertura(ctx, slug, cat) {
     ancho: f.ancho,
     alto: f.alto
   }));
+  // Cobertura del día a la que pertenece (para el enlace y el video resumen general)
+  let dia = null;
+  if ((a.tipo === "partido" || a.tipo === "jornada") && a.campeonato_id && a.fecha) {
+    const d = (await consultar(cfg, "dias_cobertura?campeonato_id=eq." + a.campeonato_id + "&fecha=eq." + encodeURIComponent(a.fecha) +
+      "&select=slug,video_publico,video_estado_publico&limit=1"))[0];
+    if (d) dia = { ruta: "/dias/" + d.slug, video: d.video_publico || null, estadoVideo: estadoPublico(d.video_estado_publico, d.video_publico) };
+  }
   return {
+    dia,
     slug: a.slug,
     titulo: a.titulo,
     tipo: a.tipo,
@@ -317,7 +355,7 @@ export async function obtenerCampeonato(ctx, slugCampeonato, slugCategoria, cat)
   return { campeonato, categoria, categorias, jornadas, recientes };
 }
 
-/* ---------- Noticias (sin cambios de comportamiento) ---------- */
+/* ---------- Noticia individual ---------- */
 
 const CONSULTA_NOTICIA =
   "id,slug,titulo,descripcion,contenido,portada_path,portada_alt,publicado_en,actualizado_en," +
@@ -341,7 +379,7 @@ async function noticiaDesdeSupabase(cfg, slug) {
     campeonato: n.campeonato ? n.campeonato.nombre : "",
     categoria: n.categoria ? n.categoria.nombre : "",
     partido: p ? p.equipo_local + (p.goles_local != null && p.goles_visitante != null ? " " + p.goles_local + "-" + p.goles_visitante + " " : " vs ") + p.equipo_visitante : "",
-    fecha: (p && p.fecha) || n.publicado_en || ""
+    fecha: (p && p.fecha) || fechaParaguay(n.publicado_en)
   };
 }
 
@@ -363,4 +401,140 @@ export async function obtenerPublicacion(ctx, tabla, slug) {
 
 export function esUuid(v) {
   return UUID_RE.test(String(v || ""));
+}
+
+/* =========================================================
+   Fecha de Paraguay
+   Las fechas con hora (publicado_en, etc.) vienen en UTC. Paraguay usa
+   UTC-3: una noticia publicada a las 22:00 en Asunción ya es "mañana" en
+   UTC. Las fechas sin hora (fecha de un partido) se dejan tal cual: no se
+   inventan ni se corren.
+   ========================================================= */
+const FORMATO_DIA_PY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Asuncion", year: "numeric", month: "2-digit", day: "2-digit" });
+export function fechaParaguay(valor) {
+  if (!valor) return "";
+  const s = String(valor);
+  if (!s.includes("T")) return s.slice(0, 10);
+  const d = new Date(s);
+  return isNaN(d) ? "" : FORMATO_DIA_PY.format(d); // AAAA-MM-DD
+}
+
+/* =========================================================
+   Cobertura del día: /dias/<slug>
+   Devuelve el día con sus partidos organizados por categoría → jornada →
+   orden de encuentro. Cada partido conserva su galería, resultado y enlace.
+   ========================================================= */
+export async function obtenerDia(ctx, slug, cat) {
+  const cfg = requerirConfig(ctx);
+  const d = (await consultar(cfg, "dias_cobertura?slug=eq." + encodeURIComponent(slug) +
+    "&select=id,campeonato_id,fecha,slug,descripcion,video_publico,video_estado_publico&limit=1"))[0];
+  if (!d) return null;
+  const columnas = "id,slug,titulo,tipo,portada_publica,video_publico,fotos_disponibles,fotos_estado_publico,video_estado_publico," +
+    "categoria_id,jornada_id,partido_id,partido:partidos(equipo_local,equipo_visitante,goles_local,goles_visitante,hora,lugar,fase,orden),fotos(id)";
+  const filas = await consultar(cfg, "albumes?campeonato_id=eq." + d.campeonato_id + "&fecha=eq." + encodeURIComponent(d.fecha) +
+    "&tipo=in.(partido,jornada)&select=" + encodeURIComponent(columnas) + "&limit=300");
+
+  const item = (f) => {
+    const t = tarjetaDesdeFila(cfg, cat, Object.assign({ campeonato_id: d.campeonato_id, fecha: d.fecha }, f));
+    t.cantidadFotos = Array.isArray(f.fotos) ? f.fotos.length : 0; // el visitante solo tiene permiso por columnas (sin count(*))
+    t.partido = f.partido || null;
+    t.orden = f.partido && f.partido.orden != null ? f.partido.orden : 0;
+    t.hora = f.partido && f.partido.hora ? String(f.partido.hora).slice(0, 5) : "";
+    return t;
+  };
+  const porCategoria = new Map();
+  const generales = [];
+  for (const f of filas) {
+    if (f.tipo === "jornada") { generales.push(item(f)); continue; }
+    const kc = f.categoria_id || "";
+    const kj = f.jornada_id || "";
+    if (!porCategoria.has(kc)) porCategoria.set(kc, new Map());
+    const jornadas = porCategoria.get(kc);
+    if (!jornadas.has(kj)) jornadas.set(kj, []);
+    jornadas.get(kj).push(item(f));
+  }
+  const ordenCat = (a, b) => {
+    const ka = cat.categoria[a], kb = cat.categoria[b];
+    if (!ka || !kb) return ka ? -1 : kb ? 1 : 0;           // "sin categoría" al final
+    return (ka.orden - kb.orden) || ka.nombre.localeCompare(kb.nombre, "es");
+  };
+  const ordenJor = (a, b) => {
+    const ja = cat.jornada[a], jb = cat.jornada[b];
+    if (!ja || !jb) return ja ? -1 : jb ? 1 : 0;
+    return (ja.orden - jb.orden) || String(ja.fecha || "").localeCompare(String(jb.fecha || "")) || ja.nombre.localeCompare(jb.nombre, "es");
+  };
+  const categorias = [...porCategoria.keys()].sort(ordenCat).map((kc) => ({
+    categoria: cat.categoria[kc] || null,
+    jornadas: [...porCategoria.get(kc).keys()].sort(ordenJor).map((kj) => ({
+      jornada: cat.jornada[kj] || null,
+      partidos: porCategoria.get(kc).get(kj).sort((x, y) => (x.orden - y.orden) || x.hora.localeCompare(y.hora) || x.titulo.localeCompare(y.titulo, "es"))
+    }))
+  }));
+  const todos = categorias.flatMap((c) => c.jornadas.flatMap((j) => j.partidos));
+  const conImagen = todos.concat(generales).find((t) => t.imagen);
+  return {
+    slug: d.slug,
+    fecha: d.fecha,
+    descripcion: d.descripcion || "",
+    campeonato: cat.campeonato[d.campeonato_id] || null,
+    video: d.video_publico || null,
+    estadoVideo: estadoPublico(d.video_estado_publico, d.video_publico),
+    categorias,
+    generales,
+    totalPartidos: todos.length,
+    totalConFotos: todos.filter((t) => t.fotos).length,
+    imagen: conImagen ? conImagen.imagenAlternativa : miniaturaYoutube(d.video_publico, "hqdefault")
+  };
+}
+
+/* =========================================================
+   Videos (sección Videos de la portada): el video resumen de cada día y
+   los videos propios de partidos, sin repetir ninguno.
+   ========================================================= */
+export async function videosPublicos(ctx, cat, limite = 4) {
+  const cfg = requerirConfig(ctx);
+  const filas = await rpc(cfg, "videos_publicos", { p_limite: Math.min(Math.max(limite, 1), 24) });
+  return filas.map((v) => {
+    const camp = cat.campeonato[v.campeonato_id];
+    const categ = cat.categoria[v.categoria_id];
+    return {
+      id: v.youtube_id,
+      esDia: Boolean(v.es_dia),
+      ruta: (v.es_dia ? "/dias/" : "/coberturas/") + v.slug,
+      titulo: v.es_dia ? "Resumen del día" + (camp ? " · " + camp.nombre : "") : v.titulo,
+      categoria: v.es_dia ? "Resumen del día" : [camp && camp.nombre, categ && categ.nombre].filter(Boolean).join(" · ") || "Video",
+      campeonato: camp ? camp.nombre : "",
+      fecha: v.fecha || ""
+    };
+  });
+}
+
+/* =========================================================
+   Noticias: listado público (solo las publicadas; las reglas RLS de la
+   base nunca devuelven borradores ni noticias a medio publicar).
+   ========================================================= */
+const COLUMNAS_LISTA_NOTICIA = "slug,titulo,descripcion,portada_path,portada_alt,publicado_en,campeonato:campeonatos(nombre)";
+
+export async function listarNoticias(ctx, { limite = 9, offset = 0, excluir = null } = {}) {
+  const cfg = configSupabase(ctx.env);
+  if (!cfg) return { items: [], total: 0 };
+  const h = Object.assign({ Prefer: "count=exact" }, cabeceras(cfg.clave));
+  const r = await fetch(cfg.url + "/rest/v1/noticias?select=" + encodeURIComponent(COLUMNAS_LISTA_NOTICIA) +
+    (excluir ? "&slug=neq." + encodeURIComponent(excluir) : "") +
+    "&order=publicado_en.desc.nullslast,id.desc&limit=" + Math.min(Math.max(limite, 1), 50) + "&offset=" + Math.max(offset, 0), { headers: h });
+  if (!r.ok) throw new Error("Supabase respondió " + r.status + " en noticias");
+  const total = Number((r.headers.get("content-range") || "").split("/")[1]) || 0;
+  const filas = await r.json();
+  return {
+    total,
+    items: filas.map((n) => ({
+      slug: n.slug,
+      titulo: n.titulo,
+      descripcion: n.descripcion || "",
+      imagen: urlPublica(cfg, n.portada_path),
+      imagenAlt: n.portada_alt || "",
+      fecha: fechaParaguay(n.publicado_en),
+      campeonato: n.campeonato ? n.campeonato.nombre : ""
+    }))
+  };
 }

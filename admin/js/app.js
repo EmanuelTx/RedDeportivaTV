@@ -13,11 +13,13 @@ import * as publicaciones from "./publicaciones.js";
 import * as catalogos from "./catalogos.js";
 import * as transmisiones from "./transmisiones.js";
 import * as coberturas from "./coberturas.js";
+import * as dias from "./dias.js";
 
 const $ = (id) => document.getElementById(id);
 
 const SECCIONES = {
   coberturas: (main, p) => coberturas.vista(main, p),
+  dias: (main, p) => dias.vista(main, p),
   noticias: (main, p) => publicaciones.vista(main, "noticias", p),
   campeonatos: (main) => catalogos.vista(main, "campeonatos"),
   categorias: (main, p) => catalogos.vista(main, "categorias", p),

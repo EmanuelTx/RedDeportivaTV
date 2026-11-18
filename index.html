@@ -63,6 +63,7 @@
       <nav class="nav" id="nav" aria-label="Navegación principal">
         <ul class="nav__list">
           <li><a href="/coberturas">Coberturas</a></li>
+          <li><a href="/noticias">Noticias</a></li>
           <li><a href="#nosotros">Nosotros</a></li>
           <li><a href="#videos">Videos</a></li>
           <li><a href="#galeria">Galería</a></li>
@@ -108,6 +109,22 @@
           <span>Fotografía deportiva</span><span>Resúmenes de partidos</span><span>Goles y festejos</span><span>Transmisiones en vivo</span><span>Narración deportiva</span><span>Seguimiento de campeonatos</span>
           <span>Fotografía deportiva</span><span>Resúmenes de partidos</span><span>Goles y festejos</span><span>Transmisiones en vivo</span><span>Narración deportiva</span><span>Seguimiento de campeonatos</span>
         </div>
+      </div>
+    </section>
+
+    <!-- ===================== ÚLTIMAS NOTICIAS =====================
+         Se llena con las noticias publicadas (js/inicio-coberturas.js).
+         Si todavía no hay ninguna, la sección queda oculta. -->
+    <section class="section noticias-inicio" id="ultimas-noticias" aria-labelledby="news-title" hidden>
+      <div class="container">
+        <div class="section__head reveal">
+          <div>
+            <p class="eyebrow">Lo último de los torneos</p>
+            <h2 class="section__title" id="news-title">Últimas noticias</h2>
+          </div>
+          <a href="/noticias" class="link-arrow">Ver todas las noticias</a>
+        </div>
+        <div class="noticias" id="noticiasGrid"></div>
       </div>
     </section>
 

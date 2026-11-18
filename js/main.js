@@ -44,10 +44,26 @@
   /* ---------- Videos (carga liviana: el reproductor se carga al hacer clic) ---------- */
   var esArchivoLocal = location.protocol === "file:";
 
-  function renderVideos() {
+  /* Lista de videos de la portada: primero los de la base de datos (el resumen
+     de cada día y los videos de partidos, del más reciente al más antiguo) y
+     después, hasta completar, los videos fijos de js/data.js. Nunca se repite
+     un mismo video (se compara por su ID de YouTube). */
+  var videosListados = [];
+
+  function armarLista(dinamicos) {
+    var total = data.videosVisibles || 4, vistos = {}, lista = [];
+    (dinamicos || []).concat(data.videos || []).forEach(function (v) {
+      if (v && v.id && !vistos[v.id] && lista.length < total) { vistos[v.id] = true; lista.push(v); }
+    });
+    return lista;
+  }
+
+  function renderVideos(dinamicos) {
     var grid = $("#videosGrid");
-    if (!grid || !data.videos) return;
-    var lista = data.videos.slice(0, data.videosVisibles || 4);
+    if (!grid) return;
+    var lista = armarLista(dinamicos);
+    if (!lista.length) return;
+    videosListados = lista;
 
     grid.innerHTML = lista.map(function (v, i) {
       var url = "https://www.youtube.com/watch?v=" + encodeURIComponent(v.id) + (v.inicio ? "&t=" + v.inicio + "s" : "");
@@ -56,23 +72,33 @@
       var play = esArchivoLocal
         ? '<a class="video__play" href="' + url + '" target="_blank" rel="noopener" aria-label="Ver en YouTube: ' + esc(v.titulo) + '"><span class="video__play-icon">' + PLAY + '</span></a>'
         : '<button class="video__play" type="button" data-index="' + i + '" aria-label="Reproducir: ' + esc(v.titulo) + '"><span class="video__play-icon">' + PLAY + '</span></button>';
+      /* Los videos de la base llevan a su página (el día o el partido); los fijos, a YouTube. */
+      var enlace = v.ruta
+        ? '<a href="' + esc(v.ruta) + '" style="text-decoration:none">' + esc(v.titulo) + '</a>'
+        : '<a href="' + url + '" target="_blank" rel="noopener" style="text-decoration:none">' + esc(v.titulo) + '</a>';
       return (
-        '<article class="video reveal">' +
+        '<article class="video reveal is-visible">' +
           '<div class="video__frame">' +
             '<img src="' + thumb + '" alt="" loading="lazy" width="480" height="360">' + play +
           '</div>' +
           '<div class="video__body">' +
             '<p class="video__cat">' + esc(v.categoria) + '</p>' +
-            '<h3 class="video__title"><a href="' + url + '" target="_blank" rel="noopener" style="text-decoration:none">' + esc(v.titulo) + '</a></h3>' +
+            '<h3 class="video__title">' + enlace + '</h3>' +
           '</div>' +
         '</article>'
       );
     }).join("");
+  }
 
+  /* Un solo oyente (se puede volver a pintar la lista sin duplicarlo) */
+  function setupReproductores() {
+    var grid = $("#videosGrid");
+    if (!grid) return;
     grid.addEventListener("click", function (e) {
       var btn = e.target.closest("button.video__play");
       if (!btn || btn.disabled) return;
-      var v = lista[+btn.dataset.index];
+      var v = videosListados[+btn.dataset.index];
+      if (!v) return;
       var src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(v.id) +
         "?autoplay=1&rel=0" + (v.inicio ? "&start=" + v.inicio : "");
       var iframe = document.createElement("iframe");
@@ -84,6 +110,9 @@
       cargarReproductor(btn.parentNode, iframe, btn);
     });
   }
+
+  /* La portada (js/inicio-coberturas.js) entrega los videos de la base de datos */
+  window.RDTVPortada = { videos: renderVideos };
 
   /* La miniatura queda visible (con un indicador de carga) hasta que el
      reproductor está listo; recién ahí aparece con un fundido. */
@@ -271,6 +300,7 @@
   /* ---------- Inicio ---------- */
   renderDestacada();
   renderVideos();
+  setupReproductores();
   renderGaleria();
   renderCampeonatos();
   renderRedes();

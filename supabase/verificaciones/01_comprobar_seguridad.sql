@@ -1,7 +1,7 @@
 -- =====================================================================
 -- RedDeportivaTV · Comprobación de seguridad (NO deja cambios)
 -- ---------------------------------------------------------------------
--- Ejecutar DESPUÉS de las migraciones 1 y 2, en el editor SQL de Supabase.
+-- Ejecutar DESPUÉS de las migraciones 1, 2 y 3, en el editor SQL de Supabase.
 -- (Las coberturas tienen además su propia verificación: 02_comprobar_coberturas.sql.)
 -- Crea datos de prueba, simula tres tipos de usuario y al final DESHACE
 -- TODO (rollback): no quedan datos, usuarios ni archivos de prueba.
@@ -94,7 +94,7 @@ insert into resultados (prueba, esperado, obtenido, ok)
 select 'RLS activado: ' || c.relname, 'true', c.relrowsecurity::text, c.relrowsecurity
 from pg_class c
 where c.relnamespace = 'public'::regnamespace
-  and c.relname in ('administradores','campeonatos','categorias','partidos','noticias','albumes','fotos','transmisiones')
+  and c.relname in ('administradores','campeonatos','categorias','partidos','noticias','albumes','fotos','transmisiones','jornadas','dias_cobertura')
 order by c.relname;
 
 insert into resultados (prueba, esperado, obtenido, ok)
@@ -108,9 +108,9 @@ order by id;
 
 insert into resultados (prueba, esperado, obtenido, ok)
 select 'Funciones SECURITY DEFINER (con search_path vacío)',
-       'album_publicado, es_admin, ruta_publicada',
+       'album_publicado, dia_publico, es_admin, ruta_publicada',
        string_agg(proname || case when proconfig @> array['search_path=""'] then '' else ' (SIN search_path)' end, ', ' order by proname),
-       string_agg(proname, ', ' order by proname) = 'album_publicado, es_admin, ruta_publicada'
+       string_agg(proname, ', ' order by proname) = 'album_publicado, dia_publico, es_admin, ruta_publicada'
          and bool_and(coalesce(proconfig @> array['search_path=""'], false))
 from pg_proc where pronamespace = 'private'::regnamespace and prosecdef;
 
@@ -121,18 +121,18 @@ select 'Todas las funciones privadas tienen search_path fijo', '0 sin fijar',
 from pg_proc where pronamespace = 'private'::regnamespace;
 
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'EXECUTE: el visitante solo puede usar', 'album_publicado, normalizar',
+select 'EXECUTE: el visitante solo puede usar', 'album_publicado, dia_publico, normalizar',
        coalesce(string_agg(proname, ', ' order by proname), '(ninguna)'),
-       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, normalizar'
+       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, dia_publico, normalizar'
 from pg_proc where pronamespace = 'private'::regnamespace and has_function_privilege('anon', oid, 'EXECUTE');
 
 insert into resultados (prueba, esperado, obtenido, ok)
-select 'EXECUTE: un usuario con sesión solo puede usar', 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida, texto_busqueda',
+select 'EXECUTE: un usuario con sesión solo puede usar', 'album_publicado, dia_publico, es_admin, normalizar, ruta_publicada, ruta_valida, texto_busqueda',
        coalesce(string_agg(proname, ', ' order by proname), '(ninguna)'),
-       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, es_admin, normalizar, ruta_publicada, ruta_valida, texto_busqueda'
+       coalesce(string_agg(proname, ', ' order by proname), '') = 'album_publicado, dia_publico, es_admin, normalizar, ruta_publicada, ruta_valida, texto_busqueda'
 from pg_proc where pronamespace = 'private'::regnamespace and has_function_privilege('authenticated', oid, 'EXECUTE');
 
-with tablas(t) as (values ('administradores'),('campeonatos'),('categorias'),('partidos'),('noticias'),('albumes'),('fotos'),('transmisiones')),
+with tablas(t) as (values ('administradores'),('campeonatos'),('categorias'),('partidos'),('noticias'),('albumes'),('fotos'),('transmisiones'),('jornadas'),('dias_cobertura')),
      permisos as (
        select r.rol, t.t, p.priv
        from (values ('anon'),('authenticated')) r(rol), tablas t,

@@ -335,3 +335,25 @@ html.visor-abierto { overflow: hidden; }
   .hero .ticker__track { animation: none; }
   .tarjeta:hover, .tarjeta:hover .tarjeta__media img, .video:hover .video__frame img { transform: none; }
 }
+
+/* =========================================================
+   Cobertura del día y noticias (pulido)
+   ========================================================= */
+.tarjeta--dia .tarjeta__titulo { font-size: 1.5rem; }
+.noticia { position: relative; }
+.noticia__enlace::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--red);
+  transform: scaleX(0); transform-origin: left; transition: transform .35s var(--ease);
+}
+.noticia__media img { transition: transform .6s var(--ease); }
+@media (hover: hover) {
+  .noticia:hover { transform: translateY(-4px); box-shadow: var(--sombra); }
+  .noticia:hover .noticia__enlace::after { transform: scaleX(1); }
+  .noticia:hover .noticia__media img { transform: scale(1.05); }
+}
+.noticia__enlace:focus-visible::after { transform: scaleX(1); }
+.noticia--nueva { animation: tarjetaEntra .4s var(--ease) both; animation-delay: calc(min(var(--n, 0), 5) * 40ms); }
+@media (prefers-reduced-motion: reduce) {
+  .noticia--nueva { animation: none !important; }
+  .noticia:hover, .noticia:hover .noticia__media img { transform: none; }
+}
