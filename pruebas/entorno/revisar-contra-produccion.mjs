@@ -14,6 +14,7 @@ const DIA = "torneo-integracion-de-la-plaza-san-isidro-2026-11-13";
 let fallos = 0;
 const rep = (ok, t, x = "") => { if (!ok) fallos++; console.log((ok ? "  OK  " : "FALLA ") + t + (x ? "  → " + x : "")); };
 let bloqueadas = 0;
+const detalle = new Map();
 
 const estado = JSON.parse(fs.readFileSync(ARCHIVO_SESION_PRODUCCION, "utf8"));
 const clonado = JSON.parse(JSON.stringify(estado));
@@ -27,7 +28,7 @@ async function contexto(state, movil = false) {
   await ctx.route("**/*", (r) => {
     const q = r.request(), u = q.url();
     const login = q.method() === "POST" && new URL(u).pathname === "/auth/v1/token";
-    if (u.includes(REF_PRODUCCION) && !login && !esLecturaPermitida(q.method(), u)) { bloqueadas++; return r.abort("blockedbyclient"); }
+    if (u.includes(REF_PRODUCCION) && !login && !esLecturaPermitida(q.method(), u)) { bloqueadas++; const k = q.method() + " " + new URL(u).pathname; detalle.set(k, (detalle.get(k) || 0) + 1); return r.abort("blockedbyclient"); }
     return r.continue();
   });
   return ctx;
@@ -97,5 +98,6 @@ async function recorrer(ctx, base, rutas, etiqueta) {
 await navegador.close();
 fs.rmSync(tmp, { force: true });
 console.log(`\nEscrituras a producción bloqueadas por el navegador: ${bloqueadas}`);
+for (const [k, n] of detalle) console.log("   " + n + " × " + k);
 console.log(fallos ? `${fallos} problema(s).` : "Todo en orden.");
 process.exit(fallos ? 1 : 0);

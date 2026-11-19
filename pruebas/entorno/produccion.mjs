@@ -12,11 +12,17 @@ export const URL_PRODUCCION = `https://${REF_PRODUCCION}.supabase.co`;
 export const SITIO_PRODUCCION = "https://reddeportivatv.pages.dev";
 export const ARCHIVO_SESION_PRODUCCION = path.join(CARPETA_PRIVADA, "sesion-produccion.json");
 
+const FUNCIONES_DE_LECTURA = /^\/rest\/v1\/rpc\/(uso_almacenamiento|buscar_coberturas|buscar_entradas|archivo_coberturas|posibles_duplicados|videos_publicos)$/;
+
 /** ¿Esta petición a producción es de solo lectura (o renovación de sesión)? */
 export function esLecturaPermitida(metodo, url) {
   const u = new URL(url);
   const m = String(metodo || "GET").toUpperCase();
   if (m === "GET" || m === "HEAD" || m === "OPTIONS") return true;
+  // Funciones de CONSULTA (STABLE en Postgres: la base les impide escribir). PostgREST las invoca por POST.
+  if (m === "POST" && FUNCIONES_DE_LECTURA.test(u.pathname)) return true;
+  // Enlaces firmados temporales para VER fotos privadas (no modifican nada).
+  if (m === "POST" && /^\/storage\/v1\/object\/sign\/(fotos-borradores|fotos-originales|fotos-publicas)(\/|$)/.test(u.pathname)) return true;
   return m === "POST" && u.pathname === "/auth/v1/token" && u.searchParams.get("grant_type") === "refresh_token";
 }
 
