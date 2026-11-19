@@ -22,7 +22,7 @@ for (const movil of [false, true]) {
     ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "es-PY", timezoneId: "America/Asuncion" }
     : { viewport: { width: 1366, height: 800 }, locale: "es-PY", timezoneId: "America/Asuncion" });
   const errores = [];
-  const nueva = async () => { const p = await ctx.newPage(); p.on("pageerror", (e) => errores.push(e.message)); p.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|ytimg|youtube/.test(m.text())) errores.push(m.text()); }); return p; };
+  const nueva = async () => { const p = await ctx.newPage(); p.on("pageerror", (e) => { errores.push(e.message); console.log("   !!! pageerror en " + p.url().replace(SITIO, "") + " :: " + String(e.stack || "").slice(0, 300)); }); p.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|ytimg|youtube/.test(m.text())) errores.push(m.text()); if (/Transition/.test(m.text())) console.log("   !!! aviso en " + p.url().replace(SITIO, "")); }); return p; };
   const cap = (p, n, opciones = {}) => p.screenshot({ path: path.join(dirCap, n + (movil ? "-celular" : "-pc") + ".png"), ...opciones });
   const scrollAnimar = async (p) => { const h = await p.evaluate(() => document.documentElement.scrollHeight); for (let y = 0; y < h; y += 500) { await p.evaluate((v) => scrollTo(0, v), y); await p.waitForTimeout(80); } await p.evaluate(() => scrollTo(0, 0)); await p.waitForTimeout(500); };
   const texto = (p) => p.evaluate(() => document.body.textContent.replace(/\s+/g, " "));

@@ -8,6 +8,11 @@
 
 import { etiquetasJornadas } from "./datos.js";
 
+/* Transición entre páginas (css/visual.css): si el navegador la cancela (p. ej. al cambiar el tamaño de la
+   ventana justo al navegar) lanza "Transition was aborted…" como error de promesa. Es inofensivo; se atiende
+   la promesa para que no aparezca, sin tocar la animación. Va en el <head> porque "pagereveal" ocurre antes
+   de que se ejecuten los scripts del final de la página. Misma línea en index.html. */
+const SCRIPT_TRANSICION = 'function f(e){var t=e&&e.viewTransition;if(t)["ready","finished","updateCallbackDone"].forEach(function(k){t[k]&&t[k].catch&&t[k].catch(function(){})})}addEventListener("pagereveal",f);addEventListener("pageswap",f);';
 const SITIO = "RedDeportivaTV";
 const IMAGEN_POR_DEFECTO = "/assets/img/fotos/futbol-duelo-1600.jpg";
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -100,6 +105,7 @@ function documento({ ctx, titulo, descripcion, imagen, imagenAlt, tipo, cuerpo, 
   <link rel="stylesheet" href="/css/publicacion.css">
   <link rel="stylesheet" href="/css/coberturas.css">
   <link rel="stylesheet" href="/css/visual.css">
+  <script>${SCRIPT_TRANSICION}</script>
 </head>
 <body>
   <a class="skip-link" href="#contenido">Saltar al contenido</a>
