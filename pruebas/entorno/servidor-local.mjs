@@ -7,7 +7,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { AQUI, URL_PRUEBAS, CLAVE_PUBLICA_PRUEBAS, PUERTO_LOCAL, sinProduccion } from "./proyecto.mjs";
 
-const RAIZ = path.resolve(AQUI, "..", "..");
+// RDTV_RAIZ permite servir OTRA copia del sitio (p. ej. la versión publicada, para pruebas de compatibilidad).
+const RAIZ = process.env.RDTV_RAIZ ? path.resolve(process.env.RDTV_RAIZ) : path.resolve(AQUI, "..", "..");
 const FUNC = path.join(RAIZ, "functions");
 const puerto = Number(process.argv[2]) || PUERTO_LOCAL;
 sinProduccion(URL_PRUEBAS, CLAVE_PUBLICA_PRUEBAS);

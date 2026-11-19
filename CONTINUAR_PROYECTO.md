@@ -37,6 +37,9 @@ Todo vive en `pruebas/entorno/` (Cloudflare responde 404 en `/pruebas/*`; `node_
 | Navegador automatizado | importar `abrir()` e `iniciarSesionAdmin()` de `navegador.mjs` (`movil: true` para celular) |
 | Cargar la **simulación** (día de 10 partidos, 24 fotos reales, video resumen, 4 noticias, EN VIVO) | `node simular-dia.mjs` (repetible; datos `sim-…` solo en pruebas) |
 | Revisar páginas públicas / panel «Coberturas del día» (PC y celular, capturas en `%LOCALAPPDATA%\RedDeportivaTV-dev\capturas`) | `node revisar-publico.mjs [movil]` · `node revisar-panel.mjs` · `node captura.mjs <ruta> <nombre> [movil] [selector]` (en Git Bash usar `export MSYS_NO_PATHCONV=1`) |
+| **Producción, solo lectura:** iniciar sesión una vez (la persona, en la ventana de Edge) → respaldo → ensayos | `node iniciar-sesion-produccion.mjs` · `node respaldar-produccion.mjs [etiqueta]` · `node probar-restauracion.mjs <carpeta>` · `node ensayo-datos-reales.mjs <carpeta>` (`produccion.mjs` solo deja pasar GET; el navegador bloquea escrituras). Plan completo: `docs/PLAN_MIGRACION_3_PRODUCCION.md` |
+| Compatibilidad web publicada ↔ base migrada | exportar el commit publicado a una carpeta y servirlo con `RDTV_RAIZ=<carpeta> node servidor-local.mjs 8151`; luego `node compat-panel-viejo.mjs` |
+| Probar «primero fotos, después video» y «borrar el último partido» | `node probar-flujo-dia.mjs` |
 | Guardar de nuevo la contraseña de la base de pruebas (único paso manual, si se pierde) | `powershell -NoProfile -ExecutionPolicy Bypass -File .\configurar-credenciales.ps1`, luego pegar la contraseña **solo cuando pida «Contraseña:»** (reset en Supabase → proyecto de pruebas → Project Settings → Database) |
 
 **Protecciones (no desactivar):**

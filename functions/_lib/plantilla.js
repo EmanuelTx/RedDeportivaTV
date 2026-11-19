@@ -714,7 +714,7 @@ export function paginaDia(ctx, d) {
       ${botonesCompartir(nombre + " · " + fechaLegible(d.fecha))}
       ${video}
       ${generales}
-      ${bloques || `<p class="pub__vacio">Las fotos de los partidos van a estar disponibles pronto.</p>`}
+      ${bloques || (d.video || generales ? "" : `<p class="pub__vacio">Las fotos de los partidos van a estar disponibles pronto.</p>`)}
       <p class="cob-volver">${camp ? `<a class="link-arrow" href="${esc(rutaCampeonato(camp))}">Más de ${esc(camp.nombre)}</a>` : ""}<a class="link-arrow" href="/coberturas">Todas las coberturas</a></p>
     </article>`;
 

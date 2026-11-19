@@ -200,7 +200,28 @@ create trigger dia_fijo_y_novedad before insert or update on public.dias_cobertu
 create trigger tocar_actualizado before update on public.dias_cobertura
   for each row execute function private.tocar_actualizado();
 
-revoke all on function private.asegurar_dia(), private.limpiar_dia(), private.dia_fijo_y_novedad()
+-- 4d. Si a un día sin partidos se le quita el video (y el texto), el día vacío
+--     se borra solo (así no queda una fila vacía en el panel).
+create function private.limpiar_dia_vacio()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (old.youtube_id is not null or old.descripcion is not null)
+     and new.youtube_id is null and new.estado_video in ('pendiente', 'no_aplica') and new.descripcion is null
+     and not exists (select 1 from public.albumes a
+                     where a.campeonato_id = new.campeonato_id and a.fecha = new.fecha
+                       and a.tipo in ('partido', 'jornada')) then
+    delete from public.dias_cobertura where id = new.id;
+  end if;
+  return null;
+end;
+$$;
+create trigger limpiar_dia_vacio after update on public.dias_cobertura
+  for each row execute function private.limpiar_dia_vacio();
+
+revoke all on function private.asegurar_dia(), private.limpiar_dia(), private.dia_fijo_y_novedad(), private.limpiar_dia_vacio()
   from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------

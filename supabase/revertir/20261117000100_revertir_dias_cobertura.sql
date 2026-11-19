@@ -35,6 +35,7 @@ drop function if exists private.limpiar_dia();
 
 drop table if exists public.dias_cobertura;   -- sus disparadores y políticas se van con ella
 drop function if exists private.dia_fijo_y_novedad();
+drop function if exists private.limpiar_dia_vacio();
 drop function if exists private.dia_publico(uuid);
 
 delete from private.migraciones where nombre = '20261117000100_dias_cobertura';

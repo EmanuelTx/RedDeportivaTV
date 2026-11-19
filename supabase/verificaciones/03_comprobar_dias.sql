@@ -367,6 +367,15 @@ select pg_temp.probar('Admin: borra la cobertura del único partido de B (su dí
   pg_temp.como('authenticated', pg_temp.admin(), $q$delete from public.albumes where id = '00000000-0000-0000-0000-0000000000d7'$q$));
 select pg_temp.probar('El día de B se CONSERVA: tiene video en edición cargado', '1',
   (select count(*)::text from public.dias_cobertura where slug = 'prueba-dia-b-2026-11-17'));
+select pg_temp.probar('Admin: publica el video del día B (que no tiene partidos)', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.dias_cobertura set estado_video = 'disponible', youtube_id = 'dddddddddd9' where slug = 'prueba-dia-b-2026-11-17'$q$));
+select pg_temp.probar('Día sin partidos pero con video publicado: se conserva y el visitante lo ve', '1 / dddddddddd9',
+  (select (select count(*) from public.dias_cobertura where slug = 'prueba-dia-b-2026-11-17')::text || ' / ' ||
+          coalesce(pg_temp.leer('anon', pg_temp.anon(), $q$select video_publico from public.dias_cobertura where slug = 'prueba-dia-b-2026-11-17'$q$), 'no lo ve')));
+select pg_temp.probar('Admin: quita el video del día B (sigue sin partidos)', 'permitido (1 filas)',
+  pg_temp.como('authenticated', pg_temp.admin(), $q$update public.dias_cobertura set estado_video = 'pendiente', youtube_id = null where slug = 'prueba-dia-b-2026-11-17'$q$));
+select pg_temp.probar('Sin partidos ni video, el día vacío se borra solo (no queda una fila vacía)', '0',
+  (select count(*)::text from public.dias_cobertura where slug = 'prueba-dia-b-2026-11-17'));
 select pg_temp.probar('Admin: mueve el partido del 16/11 al 17/11', 'permitido (1 filas)',
   pg_temp.como('authenticated', pg_temp.admin(), $q$update public.partidos set fecha = '2026-11-17' where id = '00000000-0000-0000-0000-0000000000f6'$q$));
 select pg_temp.probar('El día 16 quedó vacío y sin video: se borró solo; el 17 suma ese partido (7 con el borrador)', 'día 16: 0 / día 17: 7 partidos',

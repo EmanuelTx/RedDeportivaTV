@@ -28,10 +28,11 @@ export async function protegerContexto(contexto, avisos = []) {
 /** Abre Edge. `conSesion: true` reutiliza la sesión guardada (si existe). */
 export async function abrir({ conSesion = false, movil = false, visible = false } = {}) {
   fs.mkdirSync(CARPETA_PRIVADA, { recursive: true });
-  const navegador = await chromium.launch({ channel: "msedge", headless: !visible });
+  const navegador = await chromium.launch({ channel: "msedge", headless: !visible, args: visible ? ["--start-maximized"] : [] });
   const opciones = movil
     ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
     : { viewport: { width: 1366, height: 800 } };
+  if (visible && !movil) opciones.viewport = null; // ventana real: usa el tamaño de la ventana
   if (conSesion && fs.existsSync(ARCHIVO_SESION)) opciones.storageState = ARCHIVO_SESION;
   const contexto = await navegador.newContext({ ...opciones, locale: "es-PY", timezoneId: "America/Asuncion" });
   const avisos = [];
