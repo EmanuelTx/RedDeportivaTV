@@ -97,7 +97,7 @@ Están en `supabase/migrations/`.
 |---|---|---|
 | `20261110000100_esquema_inicial.sql` (migración 1) | ✅ Aplicada. Verificación 1 con **86/86 ok**. | ✅ Aplicada |
 | `20261111000100_coberturas.sql` (migración 2, **versión local con las correcciones del 12/11**) | ✅ **Aplicada el 12/11/2026 20:55 UTC** (huella `b06aed3332e8b4f1`). Datos y 12 archivos idénticos al respaldo; verificación 1: 87/87; verificación 2: 97/97 | ✅ Versión final aplicada en entorno limpio. Verificación 1: 87/87; verificación 2: 97/97 (también con coberturas nuevas cargadas) |
-| `20261117000100_dias_cobertura.sql` (migración 3: coberturas por día, video resumen del día) | ⏳ **NO aplicada** (necesita respaldo nuevo y autorización). Reversión: `supabase/revertir/20261117000100_revertir_dias_cobertura.sql` | ✅ Aplicada el 17/11/2026. Verificaciones 01: 90/90, 02: 98/98, 03: 78/78 (esta última con migraciones 1+2+3) |
+| `20261117000100_dias_cobertura.sql` (migración 3: coberturas por día, video resumen del día) | ✅ **Aplicada el 19/11/2026** (huella `1183bcad2f93a81a`, una sola transacción) tras respaldo completo. Verificaciones en producción: 01: 89/89, 02: 97/97, 03: 82/82 (todas con rollback; conteos sin cambios). Todas las tablas existentes idénticas al respaldo. Reversión disponible: `supabase/revertir/20261117000100_revertir_dias_cobertura.sql` | ✅ Aplicada el 17/11/2026. Verificaciones 01: 90/90, 02: 98/98, 03: 78/78 (esta última con migraciones 1+2+3) |
 
 **Migración 3 (resumen):** tabla `dias_cobertura` (un registro por campeonato + fecha real, creado y borrado solo por triggers), video resumen del día (`estado_video`, `youtube_id`, privados para visitantes hasta estar «Disponible»), funciones `buscar_entradas`, `videos_publicos`, `archivo_coberturas` actualizada. No modifica ni borra datos existentes.
 
@@ -254,3 +254,10 @@ Con el servidor andando:
 - **Prueba de fotos reales:** http://localhost:8140/pruebas/almacenamiento.html
 
 Las páginas públicas nuevas (Functions) se prueban ejecutándolas en el navegador contra la base de pruebas; ver las notas de la sesión anterior.
+
+## Anexo: acceso a producción (herramientas, 19/11/2026)
+- La contraseña de la base de producción está en el Administrador de credenciales (`RDTV-produccion-db`), guardada con `configurar-credenciales-produccion.ps1`. **Nunca** se escribe en archivos ni en el chat.
+- `node produccion-sql.mjs --leer "<sql>"` (sesión SOLO LECTURA), `--verificar <supabase/verificaciones/xx.sql>` (debe terminar en rollback) y `--aplicar-migracion <archivo>` (solo si su huella figura en `migraciones-aprobadas.json`). Verifica la identidad real de la base (usuario del proyecto + cobertura real + registro de migraciones).
+- `node respaldo-completo-db.mjs <carpeta>` copia la base completa (incluye cuentas de acceso: sensible, solo en `respaldos/`, ignorado por git).
+- `node revisar-contra-produccion.mjs` comprueba web publicada, web nueva (servidor en modo `RDTV_MODO=produccion-lectura`, puerto 8152) y paneles contra producción sin escribir.
+- Para cualquier operación que escriba en producción hace falta autorización explícita de la persona responsable en esa conversación.

@@ -11,8 +11,18 @@ import { AQUI, URL_PRUEBAS, CLAVE_PUBLICA_PRUEBAS, PUERTO_LOCAL, sinProduccion }
 const RAIZ = process.env.RDTV_RAIZ ? path.resolve(process.env.RDTV_RAIZ) : path.resolve(AQUI, "..", "..");
 const FUNC = path.join(RAIZ, "functions");
 const puerto = Number(process.argv[2]) || PUERTO_LOCAL;
-sinProduccion(URL_PRUEBAS, CLAVE_PUBLICA_PRUEBAS);
-const env = { SUPABASE_URL: URL_PRUEBAS, SUPABASE_PUBLISHABLE_KEY: CLAVE_PUBLICA_PRUEBAS };
+// Modo de comparación: RDTV_MODO=produccion-lectura usa la base de PRODUCCIÓN solo para LEER (las Functions
+// solo hacen GET con la clave pública, como cualquier visitante). Nunca para pruebas con escritura.
+const LECTURA_PRODUCCION = process.env.RDTV_MODO === "produccion-lectura";
+let env;
+if (LECTURA_PRODUCCION) {
+  const c = await (await fetch("https://reddeportivatv.pages.dev/api/config")).json();
+  env = { SUPABASE_URL: c.supabaseUrl, SUPABASE_PUBLISHABLE_KEY: c.supabaseKey };
+  console.log("MODO: PRODUCCIÓN SOLO LECTURA (clave pública)");
+} else {
+  sinProduccion(URL_PRUEBAS, CLAVE_PUBLICA_PRUEBAS);
+  env = { SUPABASE_URL: URL_PRUEBAS, SUPABASE_PUBLISHABLE_KEY: CLAVE_PUBLICA_PRUEBAS };
+}
 const TIPOS = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".xml": "application/xml" };
 
 // ---- tabla de rutas a partir de functions/ ----

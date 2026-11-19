@@ -1,6 +1,6 @@
 # Plan para aplicar la migración 3 en producción (coberturas por día)
 
-Estado: **preparado, NO ejecutado.** Requiere autorización expresa de la persona responsable.
+Estado (19/11/2026): **migración 3 APLICADA en producción y verificada** (paso 4 y 5 hechos; ver `CONTINUAR_PROYECTO.md`). **Pendiente: push de `cloudflare-prueba` (paso 7), que requiere autorización.** La web publicada sigue funcionando con la base migrada.
 Rama de trabajo: `cloudflare-prueba`. `main` (GitHub Pages oficial) no se toca en ningún paso.
 
 ## 1. Qué hace la migración 3 (todo es aditivo)

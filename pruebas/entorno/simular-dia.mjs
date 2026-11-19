@@ -5,6 +5,7 @@
 //   node simular-dia.mjs
 import { ejecutar, conectar } from "./ejecutar-sql.mjs";
 import { abrir, iniciarSesionAdmin, BASE } from "./navegador.mjs";
+import { borrarCoberturas } from "./panel-acciones.mjs";
 
 const FECHA = "2026-11-17";
 const CATEGORIAS = [
@@ -21,6 +22,7 @@ const VIDEO_PROPIO = 3;            // partido con video propio, además del resu
 const slugify = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // ---------- 1. Limpiar una simulación anterior ----------
+await borrarCoberturas("sim-"); // despublica y borra archivos como el panel
 const c = await conectar();
 const camp = (await c.query("select id from campeonatos where slug='area-4'")).rows[0].id;
 await c.query("begin");
